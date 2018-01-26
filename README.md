@@ -19,6 +19,5 @@ Debug Level     : None
 Reset Method    : ck  
 Upload Speed    : 115200  
 
-Arduino Library:  
-[pubsubclient](https://github.com/knolleary/pubsubclient)  ( [API](https://pubsubclient.knolleary.net/) )  
-[ESP8266TrueRandom](https://github.com/marvinroger/ESP8266TrueRandom)  
+Arduino Library:
+[pubsubclient](https://github.com/knolleary/pubsubclient)  ( [API](https://pubsubclient.knolleary.net/) )
