@@ -1,12 +1,25 @@
+/*
+ * feature:
+ * 1. store wifi info by json format
+ * 2. show html
+ * 3. send HTTP post to server
+ */
+
+#include <PubSubClient.h> // MQTT library
+#include "ArduinoJson.h" // json library
+#include "ESP8266TrueRandom.h" // uuid library
 #include <ESP8266WiFi.h>
-#include <PubSubClient.h>
-
-
+#include <ESP8266WebServer.h>
+#include <ESP8266WiFiMulti.h>
+#include "ESP8266HTTPClient2.h"
 
 const char* ssid = "Lab117";
 const char* password = "pcs54784";
-const char* mqtt_server = "broker.mqtt-dashboard.com";
 
+byte uuidBytes16[16]; // UUIDs in binary form are 16 bytes long
+String deviceuuid;
+
+const char* mqtt_server = "140.113.199.198";
 WiFiClient espClient;
 PubSubClient client(espClient);
 long lastMsg = 0;
@@ -57,6 +70,9 @@ void callback(char* topic, byte* payload, unsigned int length) {
 }
 
 void reconnect() {
+  String temp, willtopic,willmessage,subTopic;
+  DynamicJsonBuffer jsonBuffer;
+  JsonObject& root = jsonBuffer.createObject();
   // Loop until we're reconnected
   while (!client.connected()) {
     Serial.print("Attempting MQTT connection...");
@@ -64,13 +80,18 @@ void reconnect() {
     String clientId = "ESP8266Client-";
     clientId += String(random(0xffff), HEX);
     // Attempt to connect
+    willtopic = deviceuuid + "/ctrl/i";
     if (client.connect(clientId.c_str())) {
+
+    //if (client.connect(clientId.c_str(), willtopic, 0, 1, willmessage)) {
       Serial.println("connected");
       // Once connected, publish an announcement...
-      client.publish("outTopic", "hello world");
+      //client.publish("outTopic", "hello world");
       // ... and resubscribe
-      client.subscribe("inTopic");
-    } else {
+      subTopic = deviceuuid + "/ctrl/o";
+      client.subscribe(subTopic.c_str());
+    } 
+    else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
       Serial.println(" try again in 5 seconds");
@@ -80,9 +101,38 @@ void reconnect() {
   }
 }
 
+int http_regist(){
+  String url = "140.113.199.198:9992";
+  String Str_profile = "{\"odf_list\": [[\"ESP12F\", [null]]], \"profile\": {\"model\": \"ESP12F\", \"u_name\": null}, \"idf_list\": [[\"ESP12F\", [null]]], \"accept_protos\": [\"mqtt\"]}";
+  String PUT_response;
+  int httpCode;
+  HTTPClient http;
+  
+  http.begin(url);
+  http.addHeader("Content-Type","application/json");
+  httpCode = http.PUT(Str_profile);
+  if(httpCode !=200){
+    Serial.println("error code : "+String(httpCode));
+  }
+  else {
+    Serial.println("put successful");
+    PUT_response = http.getString();
+    Serial.println("PUT response : "+PUT_response);
+  }
+  
+  
+  
+  
+}
+
 void setup() {
   pinMode(BUILTIN_LED, OUTPUT);     // Initialize the BUILTIN_LED pin as an output
   Serial.begin(115200);
+
+  //generate device uuid 
+  ESP8266TrueRandom.uuid(uuidBytes16);
+  deviceuuid = ESP8266TrueRandom.uuidToString(uuidBytes16);
+  
   setup_wifi();
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
@@ -94,14 +144,4 @@ void loop() {
     reconnect();
   }
   client.loop();
-
-  long now = millis();
-  if (now - lastMsg > 2000) {
-    lastMsg = now;
-    ++value;
-    snprintf (msg, 75, "hello world #%ld", value);
-    Serial.print("Publish message: ");
-    Serial.println(msg);
-    client.publish("outTopic", msg);
-  }
 }
