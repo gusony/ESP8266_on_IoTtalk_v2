@@ -20,6 +20,8 @@ const char* password = "pcs54784";
 uint8_t wifimode = 1; //1:AP , 0: STA
 
 DynamicJsonBuffer jsonBuffer;
+JsonObject& json_PUT_profile = jsonBuffer.createObject();
+String ctrl_i,ctrl_o;
 
 byte uuidBytes16[16]; // UUIDs in binary form are 16 bytes long
 String deviceuuid;
@@ -253,33 +255,55 @@ void reconnect() {
     }
   }
 }
-int http_regist(){
+
+void make_profile(){  
+  JsonArray& odf_list = json_PUT_profile.createNestedArray("odf_list");
+  odf_list.add("ESP12F");
+  odf_list.createNestedArray().createNestedArray();
+
+  JsonArray& idf_list = json_PUT_profile.createNestedArray("idf_list");
+  idf_list.add("ESP12F");
+  idf_list.createNestedArray().createNestedArray();
+
+  JsonObject& profile = json_PUT_profile.createNestedObject("profile");
+  profile["model"] = "ESP12F";
+  profile["u_name"] = "null";
+
+  JsonArray& accept_protos = json_PUT_profile.createNestedArray("accept_protos");
+  accept_protos.add("mqtt");  
+}
+int dev_register(){
   String url = "http://140.113.199.198:9992/";
-  String Str_profile = "{\"odf_list\": [[\"ESP12F\", [null]]], \"profile\": {\"model\": \"ESP12F\", \"u_name\": null}, \"idf_list\": [[\"ESP12F\", [null]]], \"accept_protos\": [\"mqtt\"]}";
-  String PUT_resp;
+  String Str_PUT_profile;//= "{\"odf_list\": [[\"ESP12F\", [null]]], \"profile\": {\"model\": \"ESP12F\", \"u_name\": null}, \"idf_list\": [[\"ESP12F\", [null]]], \"accept_protos\": [\"mqtt\"]}";
+  String Str_PUT_resp;
   int httpCode;
   HTTPClient http;
 
+  make_profile();
+  json_PUT_profile.printTo(Str_PUT_profile);
+  
   Serial.println("url="+url+deviceuuid);
   http.begin(url+deviceuuid);
   http.addHeader("Content-Type","application/json");
-  httpCode = http.PUT(Str_profile);
+  httpCode = http.PUT(Str_PUT_profile);
   
   for(int i = 0; i<3; i++){//retry three times
     Serial.print("httpCode = "+(String)httpCode+ " ");
-    PUT_resp = http.getString();
-    Serial.println("response : "+PUT_resp);
+    Str_PUT_resp = http.getString();
+    Serial.println("response : "+Str_PUT_resp);
       
     if(httpCode == 200) {
       Serial.print("HTTP PUT successful, ");
-      JsonObject& Json_PUT_resp = jsonBuffer.parseObject(PUT_resp);
+      JsonObject& Json_PUT_resp = jsonBuffer.parseObject(Str_PUT_resp);
       Serial.println(Json_PUT_resp["ctrl_chans"][0].as<String>());
+      ctrl_i = Json_PUT_resp["ctrl_chans"][0].as<String>();
+      ctrl_o = Json_PUT_resp["ctrl_chans"][1].as<String>();
       
-      break;
+      i=3;// exit
     }
     else if(httpCode !=200){
       delay(100);
-      httpCode = http.PUT(Str_profile);
+      httpCode = http.PUT(Str_PUT_profile);
     }
   }
   
@@ -302,7 +326,7 @@ void setup() {
   setup_wifi();
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
-  http_regist();
+  dev_register();
 }
 void loop() {
 
