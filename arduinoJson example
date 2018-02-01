@@ -1,0 +1,24 @@
+arduinoJson example
+
+example 1:  {"odf_list":["ESP12F",[[]]],"idf_list":["ESP12F",[[]]],"profile":{"model":"ESP12F","u_name":"null"}}
+
+DynamicJsonBuffer jsonBuffer;
+JsonObject& Json_PUT_resp = jsonBuffer.createObject();
+
+void make_profile(){
+  JsonArray& odf_list = Json_PUT_resp.createNestedArray("odf_list");
+  odf_list.add("ESP12F");
+  odf_list.createNestedArray().createNestedArray();
+
+  JsonArray& idf_list = Json_PUT_resp.createNestedArray("idf_list");
+  idf_list.add("ESP12F");
+  idf_list.createNestedArray().createNestedArray();
+
+  JsonObject& profile = Json_PUT_resp.createNestedObject("profile");
+  profile["model"] = "ESP12F";
+  profile["u_name"] = "null";
+
+  JsonArray& accept_protos = Json_PUT_resp.createNestedArray("accept_protos");
+  idf_list.add("mqtt");
+}
+  ----------------------------------------------------------
