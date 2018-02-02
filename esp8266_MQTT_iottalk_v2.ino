@@ -256,7 +256,7 @@ void reconnect() {
   }
 }
 
-void make_profile(){  
+void make_profile(){
   JsonArray& odf_list = json_PUT_profile.createNestedArray("odf_list");
   odf_list.add("ESP12F");
   odf_list.createNestedArray().createNestedArray();
@@ -276,7 +276,9 @@ int dev_register(){
   String url = "http://140.113.199.198:9992/";
   String Str_PUT_profile;//= "{\"odf_list\": [[\"ESP12F\", [null]]], \"profile\": {\"model\": \"ESP12F\", \"u_name\": null}, \"idf_list\": [[\"ESP12F\", [null]]], \"accept_protos\": [\"mqtt\"]}";
   String Str_PUT_resp;
+  String rev;
   int httpCode;
+  
   HTTPClient http;
 
   make_profile();
@@ -288,17 +290,17 @@ int dev_register(){
   httpCode = http.PUT(Str_PUT_profile);
   
   for(int i = 0; i<3; i++){//retry three times
-    Serial.print("httpCode = "+(String)httpCode+ " ");
+    //Serial.println("httpCode = "+(String)httpCode+ " ");
     Str_PUT_resp = http.getString();
     Serial.println("response : "+Str_PUT_resp);
-      
+
     if(httpCode == 200) {
       Serial.print("HTTP PUT successful, ");
       JsonObject& Json_PUT_resp = jsonBuffer.parseObject(Str_PUT_resp);
-      Serial.println(Json_PUT_resp["ctrl_chans"][0].as<String>());
+      //Serial.println(Json_PUT_resp["ctrl_chans"][0].as<String>());
       ctrl_i = Json_PUT_resp["ctrl_chans"][0].as<String>();
       ctrl_o = Json_PUT_resp["ctrl_chans"][1].as<String>();
-      
+      rev    = Json_PUT_resp["rev"].as<String>();
       i=3;// exit
     }
     else if(httpCode !=200){
@@ -306,11 +308,43 @@ int dev_register(){
       httpCode = http.PUT(Str_PUT_profile);
     }
   }
-  
-  
-  
-  
-  
+
+  //JsonObject& root = jsonBuffer.createObject();
+  while (!client.connected()) {
+    Serial.print("Attempting MQTT connection...");
+        
+    JsonObject& j_wm = jsonBuffer.createObject(); //json will messenger
+    j_wm["state"] = "broken";
+    j_wm["rev"] = rev;
+    String Str_wm;
+    j_wm.printTo(Str_wm);
+    jsonBuffer.clear();
+    
+    if (client.connect("", ctrl_i.c_str(), 0, true, Str_wm.c_str() )){// connect to mqtt server
+      Serial.println("connected");
+      
+      
+      if(client.subscribe(ctrl_i.c_str(),0)){// subscribe ctrl_i
+        Serial.println("subscribe successful!");
+        JsonObject& temp = jsonBuffer.createObject();
+        temp["state"] = "online";
+        temp["rev"] = rev;
+        String mes;
+        temp.printTo(mes);
+        client.publish(ctrl_i.c_str(), mes.c_str());
+      }
+      else{
+        Serial.println("subscribe unsuccessful!");
+      }
+    } 
+    else {
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 5 seconds");
+      // Wait 5 seconds before retrying
+      delay(5000);
+    }
+  }
 }
 
 void setup() {
@@ -333,5 +367,5 @@ void loop() {
   if (!client.connected()) {
     reconnect();
   }
-  client.loop();
+  client.loop(); // like mqtt ping ,to make sure the connection between server
 }
