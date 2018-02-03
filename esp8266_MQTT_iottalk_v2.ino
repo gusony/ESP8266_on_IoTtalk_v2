@@ -214,7 +214,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
     Serial.print((char)payload[i]);
   }
   Serial.println();
-
+/*
   // Switch on the LED if an 1 was received as first character
   if ((char)payload[0] == '1') {
     digitalWrite(BUILTIN_LED, LOW);   // Turn the LED on (Note that LOW is the voltage level
@@ -223,12 +223,12 @@ void callback(char* topic, byte* payload, unsigned int length) {
   } else {
     digitalWrite(BUILTIN_LED, HIGH);  // Turn the LED off by making the voltage HIGH
   }
-
+*/
 }
 void reconnect() {
   String temp, willtopic,willmessage,subTopic;
   JsonObject& root = jsonBuffer.createObject();
-  // Loop until we're reconnected
+  
   while (!client.connected()) {
     Serial.print("Attempting MQTT connection...");
     // Create a random client ID
@@ -283,6 +283,7 @@ int dev_register(){
 
   make_profile();
   json_PUT_profile.printTo(Str_PUT_profile);
+  //jsonBuffer.clear();
   
   Serial.println("url="+url+deviceuuid);
   http.begin(url+deviceuuid);
@@ -295,7 +296,7 @@ int dev_register(){
     Serial.println("response : "+Str_PUT_resp);
 
     if(httpCode == 200) {
-      Serial.print("HTTP PUT successful, ");
+      Serial.println("HTTP PUT successful\n");
       JsonObject& Json_PUT_resp = jsonBuffer.parseObject(Str_PUT_resp);
       //Serial.println(Json_PUT_resp["ctrl_chans"][0].as<String>());
       ctrl_i = Json_PUT_resp["ctrl_chans"][0].as<String>();
@@ -318,24 +319,31 @@ int dev_register(){
     j_wm["rev"] = rev;
     String Str_wm;
     j_wm.printTo(Str_wm);
-    jsonBuffer.clear();
+    Serial.println("ctrl_i:"+ctrl_i);
+    Serial.println("ctrl_o:"+ctrl_o);
     
-    if (client.connect("", ctrl_i.c_str(), 0, true, Str_wm.c_str() )){// connect to mqtt server
+    if (client.connect(deviceuuid.c_str(), ctrl_o.c_str(), 0, true, Str_wm.c_str() )){// connect to mqtt server
       Serial.println("connected");
       
-      
-      if(client.subscribe(ctrl_i.c_str(),0)){// subscribe ctrl_i
+      String mes;
+      JsonObject& temp = jsonBuffer.createObject();
+      temp["state"] = "online";
+      temp["rev"] = rev;
+      temp.printTo(mes);
+      Serial.println("mes = "+mes);
+
+      if( client.publish(ctrl_i.c_str(), mes.c_str()) )
+        Serial.println("publish messenger");
+
+
+      client.subscribe(ctrl_o.c_str(), 0);
+      //if(client.subscribe(ctrl_o.c_str()))// subscribe ctrl_o
         Serial.println("subscribe successful!");
-        JsonObject& temp = jsonBuffer.createObject();
-        temp["state"] = "online";
-        temp["rev"] = rev;
-        String mes;
-        temp.printTo(mes);
-        client.publish(ctrl_i.c_str(), mes.c_str());
-      }
-      else{
-        Serial.println("subscribe unsuccessful!");
-      }
+      //else
+        //Serial.println("subscribe unsuccessful!");
+
+        
+      break;
     } 
     else {
       Serial.print("failed, rc=");
@@ -345,6 +353,7 @@ int dev_register(){
       delay(5000);
     }
   }
+  Serial.println("exit");
 }
 
 void setup() {
@@ -360,12 +369,17 @@ void setup() {
   setup_wifi();
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
-  dev_register();
+  
 }
 void loop() {
+  int i=0;
 
-  if (!client.connected()) {
-    reconnect();
-  }
+  if (!client.connected()) 
+    dev_register();
+
+  
   client.loop(); // like mqtt ping ,to make sure the connection between server
+  
+  
+    
 }
