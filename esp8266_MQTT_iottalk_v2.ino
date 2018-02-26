@@ -66,30 +66,30 @@ int read_netInfo(char *wifiSSID, char *wifiPASS, char *ServerIP){   // storage f
     int addr=0;
   
     char temp = EEPROM.read(addr++);
-    if(temp == '['){
-        for (int i=0; i<3; i++){
-            readdata ="";
-            while(1){
-                temp = EEPROM.read(addr++);
-                if (temp == ',' || temp == ']') break;
-                readdata += temp;
-            }
-            readdata.toCharArray(netInfo[i],100);
-        }
- 
-        if (String(ServerIP).length () < 7){
-            Serial.println("ServerIP loading failed.");
-            return 2;
-        }
-        else{ 
-            Serial.println("Load setting successfully.");
-            return 0;
-        }
+    if(temp != '['){
+      Serial.println("no data in eeprom");
+      return 1;
     }
-    else{
-        Serial.println("no data in eeprom");
-        return 1;
+    
+    for (int i=0; i<3; i++,readdata =""){
+        while(1){
+            temp = EEPROM.read(addr++);
+            if (temp == ',' || temp == ']') 
+              break;
+            readdata += temp;
+        }
+        readdata.toCharArray(netInfo[i],100);
     }
+
+    if (String(ServerIP).length () < 7){
+      Serial.println("ServerIP loading failed.");
+      return 2;  
+    }
+    
+    Serial.println("Load setting successfully.");
+    return 0;
+  
+    
 }
 String scan_network(void){
     int AP_N,i;  //AP_N: AP number 
@@ -278,7 +278,7 @@ int dev_register(){
   String Str_PUT_resp;
   String rev;
   int httpCode;
-  
+ 
   HTTPClient http;
 
   make_profile();
@@ -291,14 +291,12 @@ int dev_register(){
   httpCode = http.PUT(Str_PUT_profile);
   
   for(int i = 0; i<3; i++){//retry three times
-    //Serial.println("httpCode = "+(String)httpCode+ " ");
     Str_PUT_resp = http.getString();
     Serial.println("response : "+Str_PUT_resp);
 
     if(httpCode == 200) {
       Serial.println("HTTP PUT successful\n");
       JsonObject& Json_PUT_resp = jsonBuffer.parseObject(Str_PUT_resp);
-      //Serial.println(Json_PUT_resp["ctrl_chans"][0].as<String>());
       ctrl_i = Json_PUT_resp["ctrl_chans"][0].as<String>();
       ctrl_o = Json_PUT_resp["ctrl_chans"][1].as<String>();
       rev    = Json_PUT_resp["rev"].as<String>();
@@ -310,20 +308,25 @@ int dev_register(){
     }
   }
 
-  //JsonObject& root = jsonBuffer.createObject();
+
   while (!client.connected()) {
-    Serial.print("Attempting MQTT connection...");
-        
     JsonObject& j_wm = jsonBuffer.createObject(); //json will messenger
     j_wm["state"] = "broken";
     j_wm["rev"] = rev;
     String Str_wm;
     j_wm.printTo(Str_wm);
+    
     Serial.println("ctrl_i:"+ctrl_i);
     Serial.println("ctrl_o:"+ctrl_o);
-    
-    if (client.connect(deviceuuid.c_str(), ctrl_o.c_str(), 0, true, Str_wm.c_str() )){// connect to mqtt server
-      Serial.println("connected");
+
+    Serial.print("Attempting MQTT connection...");
+    if (client.connect(deviceuuid.c_str())) {//if (client.connect(deviceuuid.c_str(), ctrl_o.c_str(), 0, true, Str_wm.c_str() )){// connect to mqtt server
+      Serial.println("connected state : "+(String)client.state());
+
+      client.subscribe(ctrl_i.c_str());
+      client.subscribe(ctrl_o.c_str());
+      //if(client.subscribe(ctrl_o.c_str()))
+      Serial.println("subscribe successful!");
       
       String mes;
       JsonObject& temp = jsonBuffer.createObject();
@@ -334,17 +337,9 @@ int dev_register(){
 
       if( client.publish(ctrl_i.c_str(), mes.c_str()) )
         Serial.println("publish messenger");
-
-
-      client.subscribe(ctrl_o.c_str(), 0);
-      //if(client.subscribe(ctrl_o.c_str()))// subscribe ctrl_o
-        Serial.println("subscribe successful!");
-      //else
-        //Serial.println("subscribe unsuccessful!");
-
-        
+      
       break;
-    } 
+    }
     else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -357,12 +352,13 @@ int dev_register(){
 }
 
 void setup() {
-  pinMode(BUILTIN_LED, OUTPUT);     // Initialize the BUILTIN_LED pin as an output
+  //pinMode(BUILTIN_LED, OUTPUT);     // Initialize the BUILTIN_LED pin as an output
   Serial.begin(115200);
-
-  //generate device uuid 
-  ESP8266TrueRandom.uuid(uuidBytes16);
-  deviceuuid = ESP8266TrueRandom.uuidToString(uuidBytes16);
+  uint8_t mac[6];
+  WiFi.macAddress(mac);
+  
+  //generate device uuid
+  deviceuuid = ESP8266TrueRandom.uuidToString(mac);
   Serial.print("deviceuuid : ");
   Serial.println(deviceuuid);
   
@@ -370,16 +366,12 @@ void setup() {
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
   
+  dev_register();
+  
 }
 void loop() {
-  int i=0;
-
-  if (!client.connected()) 
-    dev_register();
-
   
-  client.loop(); // like mqtt ping ,to make sure the connection between server
-  
-  
+  if(!client.loop()) // like mqtt ping ,to make sure the connection between server
+    dev_register(); 
     
 }
