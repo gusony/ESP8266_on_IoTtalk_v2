@@ -20,7 +20,7 @@ const char* password = "pcs54784";
 uint8_t wifimode = 1; //1:AP , 0: STA
 
 DynamicJsonBuffer jsonBuffer;
-JsonObject& json_PUT_profile = jsonBuffer.createObject();
+
 String ctrl_i,ctrl_o;
 
 byte uuidBytes16[16]; // UUIDs in binary form are 16 bytes long
@@ -256,7 +256,9 @@ void reconnect() {
   }
 }
 
-void make_profile(){
+String make_profile(){
+  JsonObject& json_PUT_profile = jsonBuffer.createObject();
+  
   JsonArray& odf_list = json_PUT_profile.createNestedArray("odf_list");
   odf_list.add("ESP12F");
   odf_list.createNestedArray().createNestedArray();
@@ -270,7 +272,12 @@ void make_profile(){
   profile["u_name"] = "null";
 
   JsonArray& accept_protos = json_PUT_profile.createNestedArray("accept_protos");
-  accept_protos.add("mqtt");  
+  accept_protos.add("mqtt");
+
+  String result;
+  json_PUT_profile.printTo(result);
+  return(result);
+  
 }
 int dev_register(){
   String url = "http://140.113.199.198:9992/";
@@ -281,9 +288,7 @@ int dev_register(){
  
   HTTPClient http;
 
-  make_profile();
-  json_PUT_profile.printTo(Str_PUT_profile);
-  //jsonBuffer.clear();
+  Str_PUT_profile = make_profile();
   
   Serial.println("url="+url+deviceuuid);
   http.begin(url+deviceuuid);
@@ -323,10 +328,11 @@ int dev_register(){
     if (client.connect(deviceuuid.c_str())) {//if (client.connect(deviceuuid.c_str(), ctrl_o.c_str(), 0, true, Str_wm.c_str() )){// connect to mqtt server
       Serial.println("connected state : "+(String)client.state());
 
-      client.subscribe(ctrl_i.c_str());
-      client.subscribe(ctrl_o.c_str());
-      //if(client.subscribe(ctrl_o.c_str()))
-      Serial.println("subscribe successful!");
+      if( client.subscribe(ctrl_i.c_str()) )
+        Serial.println("ctrl_i subscribe successful!");
+      
+      if( client.subscribe(ctrl_o.c_str()) )
+        Serial.println("ctil_o subscribe successful!");
       
       String mes;
       JsonObject& temp = jsonBuffer.createObject();
