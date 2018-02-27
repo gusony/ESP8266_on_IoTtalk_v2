@@ -161,7 +161,6 @@ void wifi_setting(void){
     start_web_server();
     Serial.println ( "Switch to AP mode and start web server." );
 }
-
 void connect_to_wifi(char *wifiSSID, char *wifiPASS){
   long connecttimeout = millis();
   
@@ -214,47 +213,8 @@ void callback(char* topic, byte* payload, unsigned int length) {
     Serial.print((char)payload[i]);
   }
   Serial.println();
-/*
-  // Switch on the LED if an 1 was received as first character
-  if ((char)payload[0] == '1') {
-    digitalWrite(BUILTIN_LED, LOW);   // Turn the LED on (Note that LOW is the voltage level
-    // but actually the LED is on; this is because
-    // it is acive low on the ESP-01)
-  } else {
-    digitalWrite(BUILTIN_LED, HIGH);  // Turn the LED off by making the voltage HIGH
-  }
-*/
 }
-void reconnect() {
-  String temp, willtopic,willmessage,subTopic;
-  JsonObject& root = jsonBuffer.createObject();
-  
-  while (!client.connected()) {
-    Serial.print("Attempting MQTT connection...");
-    // Create a random client ID
-    String clientId = "ESP8266Client-";
-    clientId += String(random(0xffff), HEX);
-    // Attempt to connect
-    willtopic = deviceuuid + "/ctrl/i";
-    if (client.connect(clientId.c_str())) {
 
-    //if (client.connect(clientId.c_str(), willtopic, 0, 1, willmessage)) {
-      Serial.println("connected");
-      // Once connected, publish an announcement...
-      //client.publish("outTopic", "hello world");
-      // ... and resubscribe
-      subTopic = deviceuuid + "/ctrl/o";
-      client.subscribe(subTopic.c_str());
-    } 
-    else {
-      Serial.print("failed, rc=");
-      Serial.print(client.state());
-      Serial.println(" try again in 5 seconds");
-      // Wait 5 seconds before retrying
-      delay(5000);
-    }
-  }
-}
 
 String make_profile(){
   JsonObject& json_PUT_profile = jsonBuffer.createObject();
@@ -281,14 +241,13 @@ String make_profile(){
 }
 int dev_register(){
   String url = "http://140.113.199.198:9992/";
-  String Str_PUT_profile;//= "{\"odf_list\": [[\"ESP12F\", [null]]], \"profile\": {\"model\": \"ESP12F\", \"u_name\": null}, \"idf_list\": [[\"ESP12F\", [null]]], \"accept_protos\": [\"mqtt\"]}";
+  String Str_PUT_profile = make_profile();//= "{\"odf_list\": [[\"ESP12F\", [null]]], \"profile\": {\"model\": \"ESP12F\", \"u_name\": null}, \"idf_list\": [[\"ESP12F\", [null]]], \"accept_protos\": [\"mqtt\"]}";
   String Str_PUT_resp;
   String rev;
   int httpCode;
  
   HTTPClient http;
 
-  Str_PUT_profile = make_profile();
   
   Serial.println("url="+url+deviceuuid);
   http.begin(url+deviceuuid);
