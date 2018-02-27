@@ -19,9 +19,9 @@ const char* ssid = "Lab117";
 const char* password = "pcs54784";
 uint8_t wifimode = 1; //1:AP , 0: STA
 
-DynamicJsonBuffer jsonBuffer;
+//DynamicJsonBuffer jsonBuffer;
 
-String ctrl_i,ctrl_o;
+String ctrl_i,ctrl_o,d_name;
 
 byte uuidBytes16[16]; // UUIDs in binary form are 16 bytes long
 String deviceuuid;
@@ -30,9 +30,9 @@ const char* mqtt_server = "140.113.199.198";
 char IoTtalkServerIP[100] = "";
 WiFiClient espClient;
 PubSubClient client(espClient);
-long lastMsg = 0;
-char msg[50];
-int value = 0;
+//long lastMsg = 0;
+//char msg[50];
+//int value = 0;
 
 
 void clr_eeprom(int sw=0){
@@ -217,25 +217,27 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
 
 String make_profile(){
-  JsonObject& json_PUT_profile = jsonBuffer.createObject();
+  DynamicJsonBuffer JB_PUT_profile;
+  JsonObject& JO_PUT_profile = JB_PUT_profile.createObject();
   
-  JsonArray& odf_list = json_PUT_profile.createNestedArray("odf_list");
+  JsonArray& odf_list = JO_PUT_profile.createNestedArray("odf_list");
   odf_list.add("ESP12F");
   odf_list.createNestedArray().createNestedArray();
 
-  JsonArray& idf_list = json_PUT_profile.createNestedArray("idf_list");
+  JsonArray& idf_list = JO_PUT_profile.createNestedArray("idf_list");
   idf_list.add("ESP12F");
   idf_list.createNestedArray().createNestedArray();
 
-  JsonObject& profile = json_PUT_profile.createNestedObject("profile");
+  JsonObject& profile = JO_PUT_profile.createNestedObject("profile");
   profile["model"] = "ESP12F";
   profile["u_name"] = "null";
 
-  JsonArray& accept_protos = json_PUT_profile.createNestedArray("accept_protos");
+  JsonArray& accept_protos = JO_PUT_profile.createNestedArray("accept_protos");
   accept_protos.add("mqtt");
 
   String result;
-  json_PUT_profile.printTo(result);
+  JO_PUT_profile.printTo(result);
+  JB_PUT_profile.clear();
   return(result);
   
 }
@@ -244,27 +246,30 @@ int dev_register(){
   String Str_PUT_profile = make_profile();//= "{\"odf_list\": [[\"ESP12F\", [null]]], \"profile\": {\"model\": \"ESP12F\", \"u_name\": null}, \"idf_list\": [[\"ESP12F\", [null]]], \"accept_protos\": [\"mqtt\"]}";
   String Str_PUT_resp;
   String rev;
-  int httpCode;
- 
-  HTTPClient http;
-
   
-  Serial.println("url="+url+deviceuuid);
+  //http PUT
+  int httpCode;
+  HTTPClient http;
   http.begin(url+deviceuuid);
   http.addHeader("Content-Type","application/json");
   httpCode = http.PUT(Str_PUT_profile);
   
-  for(int i = 0; i<3; i++){//retry three times
+  Serial.println("url="+url+deviceuuid);
+  
+  for(int i = 0; i<3; i++){
     Str_PUT_resp = http.getString();
     Serial.println("response : "+Str_PUT_resp);
 
     if(httpCode == 200) {
       Serial.println("HTTP PUT successful\n");
-      JsonObject& Json_PUT_resp = jsonBuffer.parseObject(Str_PUT_resp);
-      ctrl_i = Json_PUT_resp["ctrl_chans"][0].as<String>();
-      ctrl_o = Json_PUT_resp["ctrl_chans"][1].as<String>();
-      rev    = Json_PUT_resp["rev"].as<String>();
-      i=3;// exit
+      DynamicJsonBuffer JB_PUT_resp;
+      JsonObject& JO_PUT_resp = JB_PUT_resp.parseObject(Str_PUT_resp);
+      ctrl_i = JO_PUT_resp["ctrl_chans"][0].as<String>(); Serial.println("ctrl_i:"+ctrl_i);
+      ctrl_o = JO_PUT_resp["ctrl_chans"][1].as<String>(); Serial.println("ctrl_o:"+ctrl_o);
+      d_name = JO_PUT_resp["name"].as<String>();          Serial.println("d_name:"+d_name);
+      rev    = JO_PUT_resp["rev"].as<String>();
+      JB_PUT_resp.clear();
+      break;
     }
     else if(httpCode !=200){
       delay(100);
@@ -274,17 +279,16 @@ int dev_register(){
 
 
   while (!client.connected()) {
-    JsonObject& j_wm = jsonBuffer.createObject(); //json will messenger
-    j_wm["state"] = "broken";
-    j_wm["rev"] = rev;
+    DynamicJsonBuffer JB_wm;
+    JsonObject& JO_wm = JB_wm.createObject(); //json will messenger
+    JO_wm["state"] = "broken";
+    JO_wm["rev"] = rev;
     String Str_wm;
-    j_wm.printTo(Str_wm);
+    JO_wm.printTo(Str_wm);
+    JB_wm.clear();
     
-    Serial.println("ctrl_i:"+ctrl_i);
-    Serial.println("ctrl_o:"+ctrl_o);
-
     Serial.print("Attempting MQTT connection...");
-    if (client.connect(deviceuuid.c_str())) {//if (client.connect(deviceuuid.c_str(), ctrl_o.c_str(), 0, true, Str_wm.c_str() )){// connect to mqtt server
+    if (client.connect(deviceuuid.c_str(), ctrl_i.c_str(), 0, true, Str_wm.c_str() )){// connect to mqtt server
       Serial.println("connected state : "+(String)client.state());
 
       if( client.subscribe(ctrl_i.c_str()) )
@@ -294,15 +298,17 @@ int dev_register(){
         Serial.println("ctil_o subscribe successful!");
       
       String mes;
-      JsonObject& temp = jsonBuffer.createObject();
-      temp["state"] = "online";
-      temp["rev"] = rev;
-      temp.printTo(mes);
+      DynamicJsonBuffer JB_temp;
+      JsonObject& JO_temp = JB_temp.createObject();
+      JO_temp["state"] = "online";
+      JO_temp["rev"] = rev;
+      JO_temp.printTo(mes);
       Serial.println("mes = "+mes);
 
       if( client.publish(ctrl_i.c_str(), mes.c_str()) )
         Serial.println("publish messenger");
-      
+
+      Serial.println("Register finish.");
       break;
     }
     else {
@@ -337,6 +343,8 @@ void setup() {
 void loop() {
   
   if(!client.loop()) // like mqtt ping ,to make sure the connection between server
-    dev_register(); 
+    dev_register();
+
+  
     
 }
