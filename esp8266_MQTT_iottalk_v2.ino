@@ -5,6 +5,16 @@
  * 3. send HTTP post to server
  */
 
+ /*
+  * when device set up, it need to check wifi first 
+  * 1. check wifi status(has connecte to wifi or not), WL_CONNECTED->5. ,other->2.
+  * 2. check EEPROM (if there are data in EEPROM), return(0)->5. , false->3.
+  * 3. start the web server(let user choose ssid and password ), go to 4.
+  * 4. connect to wifi ap and store data to EEPROM, go to 5.
+  * 5. wifi connected .
+  * 
+  */
+
 #include <PubSubClient.h> // MQTT library
 #include "ArduinoJson.h" // json library
 #include "ESP8266TrueRandom.h" // uuid library
@@ -19,7 +29,6 @@ const char* ssid = "Lab117";
 const char* password = "pcs54784";
 uint8_t wifimode = 1; //1:AP , 0: STA
 
-//DynamicJsonBuffer jsonBuffer;
 
 String ctrl_i,ctrl_o,d_name;
 
@@ -35,7 +44,7 @@ PubSubClient client(espClient);
 //int value = 0;
 
 
-void clr_eeprom(int sw=0){
+void clr_eeprom(int sw=0){//clear eeprom (and wifi disconnect?)
     if (!sw){
         Serial.println("Count down 3 seconds to clear EEPROM.");
         delay(3000);
@@ -60,7 +69,7 @@ void save_WiFi_AP_Info(char *wifiSSID, char *wifiPASS, char *ServerIP){  //stoag
     EEPROM.write (addr++,']');
     EEPROM.commit();
 }
-int read_netInfo(char *wifiSSID, char *wifiPASS, char *ServerIP){   // storage format: [SSID,PASS,ServerIP]
+int  read_WiFi_AP_Info(char *wifiSSID, char *wifiPASS, char *ServerIP){   // storage format: [SSID,PASS,ServerIP]
     char *netInfo[3] = {wifiSSID, wifiPASS, ServerIP};
     String readdata="";
     int addr=0;
@@ -87,9 +96,7 @@ int read_netInfo(char *wifiSSID, char *wifiPASS, char *ServerIP){   // storage f
     }
     
     Serial.println("Load setting successfully.");
-    return 0;
-  
-    
+    return 0;   
 }
 String scan_network(void){
     int AP_N,i;  //AP_N: AP number 
@@ -100,8 +107,12 @@ String scan_network(void){
     delay(100);
     AP_N = WiFi.scanNetworks();
 
-    if(AP_N>0) for (i=0;i<AP_N;i++) AP_List += "<option value=\""+WiFi.SSID(i)+"\">" + WiFi.SSID(i) + "</option>";
-    else AP_List = "<option value=\"\">NO AP</option>";
+    if(AP_N>0) 
+      for (i=0;i<AP_N;i++) 
+        AP_List += "<option value=\""+WiFi.SSID(i)+"\">" + WiFi.SSID(i) + "</option>";
+    else
+      AP_List = "<option value=\"\">NO AP</option>";
+    
     AP_List +="</select><br><br>";
     return(AP_List); 
 }
@@ -127,21 +138,6 @@ void handleNotFound() {
   Serial.println("Page Not Found ");
   server.send( 404, "text/html", "Page not found.");
 }
-void saveInfoAndConnectToWiFi() {
-    Serial.println("Get network information.");
-    char _SSID_[100]="";
-    char _PASS_[100]="";
-    
-    if (server.arg(0) != ""){//arg[0]-> SSID, arg[1]-> password (both string)
-      server.arg(0).toCharArray(_SSID_,100);
-      server.arg(1).toCharArray(_PASS_,100);
-      server.arg(2).toCharArray(IoTtalkServerIP,100);
-      server.send(200, "text/html", "ok");
-      server.stop();
-      save_WiFi_AP_Info(_SSID_, _PASS_, IoTtalkServerIP);
-      connect_to_wifi(_SSID_, _PASS_);      
-    }
-}
 void start_web_server(void){
     server.on ( "/", handleRoot );
     server.on ( "/setup", saveInfoAndConnectToWiFi);
@@ -149,7 +145,7 @@ void start_web_server(void){
     server.begin();  
 }
 void wifi_setting(void){
-    String softapname = "UV_Light";
+    String softapname = "ESP12F";
     IPAddress ip(192,168,0,1);
     IPAddress gateway(192,168,0,1);
     IPAddress subnet(255,255,255,0);  
@@ -183,6 +179,22 @@ void connect_to_wifi(char *wifiSSID, char *wifiPASS){
     wifi_setting();
   }
 }
+void saveInfoAndConnectToWiFi() {
+    Serial.println("Get network information.");
+    char _SSID_[100]="";
+    char _PASS_[100]="";
+    
+    if (server.arg(0) != ""){//arg[0]-> SSID, arg[1]-> password (both string)
+      server.arg(0).toCharArray(_SSID_,100);
+      server.arg(1).toCharArray(_PASS_,100);
+      server.arg(2).toCharArray(IoTtalkServerIP,100);
+      server.send(200, "text/html", "ok");
+      server.stop();
+      save_WiFi_AP_Info(_SSID_, _PASS_, IoTtalkServerIP);
+      connect_to_wifi(_SSID_, _PASS_);      
+    }
+}
+
 void setup_wifi() {
   delay(10);
   // We start by connecting to a WiFi network
@@ -332,8 +344,12 @@ void setup() {
   deviceuuid = ESP8266TrueRandom.uuidToString(mac);
   Serial.print("deviceuuid : ");
   Serial.println(deviceuuid);
+
+  read_WiFi_AP_Info();
   
-  setup_wifi();
+  //setup_wifi();
+
+  
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
   
