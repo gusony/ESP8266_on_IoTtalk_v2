@@ -11,8 +11,7 @@
   * 2. check EEPROM (if there are data in EEPROM), return(0)->5. , false->3.
   * 3. start the web server(let user choose ssid and password ), go to 4.
   * 4. connect to wifi ap and store data to EEPROM, go to 5.
-  * 5. wifi connected .
-  * 
+  * 5. wifi has connected.
   */
 
 #include <PubSubClient.h> // MQTT library
@@ -24,10 +23,7 @@
 #include "ESP8266HTTPClient2.h"
 #include <EEPROM.h>
 
-ESP8266WebServer server ( 80 );
-const char* ssid = "Lab117";
-const char* password = "pcs54784";
-uint8_t wifimode = 1; //1:AP , 0: STA
+#define LEDPIN 2
 
 
 String ctrl_i,ctrl_o,d_name;
@@ -35,10 +31,15 @@ String ctrl_i,ctrl_o,d_name;
 byte uuidBytes16[16]; // UUIDs in binary form are 16 bytes long
 String deviceuuid;
 
-const char* mqtt_server = "140.113.199.198";
-char IoTtalkServerIP[100] = "";
+
+ESP8266WebServer server ( 80 );
+char IoTtalkServerIP[100] = "140.113.199.198";
 WiFiClient espClient;
 PubSubClient client(espClient);
+//const char* ssid = "Lab117";
+//const char* password = "pcs54784";
+uint8_t wifimode = 1; //1:AP , 0: STA
+//const char* mqtt_server = "140.113.199.198";
 //long lastMsg = 0;
 //char msg[50];
 //int value = 0;
@@ -116,7 +117,8 @@ String scan_network(void){
     AP_List +="</select><br><br>";
     return(AP_List); 
 }
-void handleRoot(){
+void handleRoot(void){
+  Serial.println("handleRoot");
   String temp = "<html><title>Wi-Fi Setting</title>";
   temp += "<head><meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"/>";
   temp += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"></head>";
@@ -126,15 +128,15 @@ void handleRoot(){
   temp += "Password:<br>";
   temp += "<input type=\"password\" name=\"Password\" vplaceholder=\"輸入AP密碼\" style=\"width: 150px;\">";
   temp += "<br><br>IoTtalk Server IP<br>";  
-  temp += "<input type=\"serverIP\" name=\"serverIP\" value=\"140.113.199.199\" style=\"width: 150px;\">";
+  temp += "<input type=\"serverIP\" name=\"serverIP\" value=\"140.113.199.198\" style=\"width: 150px;\">";
   temp += "<br><br><input type=\"submit\" value=\"Submit\" on_click=\"javascript:alert('TEST');\">";
   temp += "</div></form><br>";
-  temp += "<div><input type=\"button\" value=\"開啟\" onclick=\"location.href=\'turn_on_pin\'\"><br>";
-  temp += "<input type=\"button\" value=\"關閉\" onclick=\"location.href=\'turn_off_pin\'\"><br></div>";
+  //temp += "<div><input type=\"button\" value=\"開啟\" onclick=\"location.href=\'turn_on_pin\'\"><br>";
+  //temp += "<input type=\"button\" value=\"關閉\" onclick=\"location.href=\'turn_off_pin\'\"><br></div>";
   temp += "</html>";
   server.send ( 200, "text/html", temp );
 }
-void handleNotFound() {
+void handleNotFound(void) {
   Serial.println("Page Not Found ");
   server.send( 404, "text/html", "Page not found.");
 }
@@ -144,7 +146,7 @@ void start_web_server(void){
     server.onNotFound ( handleNotFound );
     server.begin();  
 }
-void wifi_setting(void){
+void ap_setting(void){
     String softapname = "ESP12F";
     IPAddress ip(192,168,0,1);
     IPAddress gateway(192,168,0,1);
@@ -154,8 +156,12 @@ void wifi_setting(void){
     WiFi.softAPConfig(ip,gateway,subnet);
     WiFi.softAP(&softapname[0]);
     //if ( MDNS.begin ( "esp8266" ) ) Serial.println ( "MDNS responder started" ); //enable Multicast DNS to provide Bonjour service.
+    
     start_web_server();
+    
     Serial.println ( "Switch to AP mode and start web server." );
+    while(wifimode) server.handleClient();
+    Serial.println("exit ap_setting");
 }
 void connect_to_wifi(char *wifiSSID, char *wifiPASS){
   long connecttimeout = millis();
@@ -171,51 +177,38 @@ void connect_to_wifi(char *wifiSSID, char *wifiPASS){
   
   if(WiFi.status() == WL_CONNECTED){
     Serial.println ( "Connected!\n");
-    digitalWrite(2,LOW);
+    digitalWrite(LEDPIN,LOW);
     wifimode = 0;
   }
   else if (millis() - connecttimeout > 10000){
     Serial.println("Connect fail");
-    wifi_setting();
+    ap_setting();
   }
 }
-void saveInfoAndConnectToWiFi() {
+void saveInfoAndConnectToWiFi(void) {
     Serial.println("Get network information.");
     char _SSID_[100]="";
     char _PASS_[100]="";
     
     if (server.arg(0) != ""){//arg[0]-> SSID, arg[1]-> password (both string)
-      server.arg(0).toCharArray(_SSID_,100);
-      server.arg(1).toCharArray(_PASS_,100);
+      server.arg(0).toCharArray(_SSID_,sizeof(_SSID_));
+      server.arg(1).toCharArray(_PASS_,sizeof(_PASS_));
       server.arg(2).toCharArray(IoTtalkServerIP,100);
       server.send(200, "text/html", "ok");
       server.stop();
+      Serial.print("[");
+      Serial.print(_SSID_);
+      Serial.print("][");
+      Serial.print(_PASS_);
+      Serial.print("][");
+      Serial.print(IoTtalkServerIP);
+      Serial.println("]");
       save_WiFi_AP_Info(_SSID_, _PASS_, IoTtalkServerIP);
       connect_to_wifi(_SSID_, _PASS_);      
     }
 }
 
-void setup_wifi() {
-  delay(10);
-  // We start by connecting to a WiFi network
-  Serial.println();
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
 
-  WiFi.begin(ssid, password);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-
-  randomSeed(micros());
-
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
-}
 
 void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print("Message arrived [");
@@ -226,8 +219,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
   Serial.println();
 }
-
-
 String make_profile(){
   DynamicJsonBuffer JB_PUT_profile;
   JsonObject& JO_PUT_profile = JB_PUT_profile.createObject();
@@ -335,32 +326,74 @@ int dev_register(){
 }
 
 void setup() {
-  //pinMode(BUILTIN_LED, OUTPUT);     // Initialize the BUILTIN_LED pin as an output
-  Serial.begin(115200);
+  
   uint8_t mac[6];
-  WiFi.macAddress(mac);
+  char *wifiSSID, *wifiPASS;
   
-  //generate device uuid
-  deviceuuid = ESP8266TrueRandom.uuidToString(mac);
-  Serial.print("deviceuuid : ");
-  Serial.println(deviceuuid);
-
-  read_WiFi_AP_Info();
+  delay(100);
   
-  //setup_wifi();
-
+  EEPROM.begin(512);
+  Serial.begin(115200);
+  pinMode(LEDPIN, OUTPUT);  // Initialize the BUILTIN_LED pin as an output
+  pinMode(5, INPUT);   // GPIO5 : clear EEPROM
+  //WiFi.disconnect();
   
-  client.setServer(mqtt_server, 1883);
+  /*for(int addr=0; addr<100; addr++) 
+    EEPROM.write(addr,0);   // clear eeprom
+  EEPROM.commit();
+  Serial.println("Clear EEPROM.");*/
+  
+  if(WiFi.status() != WL_CONNECTED){
+    Serial.println("status != connnected");
+    if(read_WiFi_AP_Info(wifiSSID, wifiPASS, &IoTtalkServerIP[0]) == 0) {
+      Serial.println("read data from eeprom ,return 0");
+      connect_to_wifi(wifiSSID, wifiPASS);
+    }
+    else {
+      Serial.println("read data from eeprom ,return non 0");
+      ap_setting();
+    }
+  }
+  if(WiFi.status() == WL_CONNECTED){
+    Serial.println("wifi connected");
+  }
+  
+  /*
+  client.setServer(IoTtalkServerIP, 1883);
   client.setCallback(callback);
   
+  //generate device uuid
+  WiFi.macAddress(mac);
+  deviceuuid = ESP8266TrueRandom.uuidToString(mac);
+  Serial.print("deviceuuid : " + deviceuuid );
   dev_register();
-  
+  */
 }
 void loop() {
-  
-  if(!client.loop()) // like mqtt ping ,to make sure the connection between server
-    dev_register();
-
-  
-    
+  /*
+    if(!client.loop()) // like mqtt ping ,to make sure the connection between server
+      dev_register();
+  */
 }
+
+/*void setup_wifi() {
+  delay(10);
+  // We start by connecting to a WiFi network
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  randomSeed(micros());
+
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+}*/
