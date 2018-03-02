@@ -34,10 +34,11 @@ String deviceuuid;
 
 bool new_message = false;
 String mqtt_mes = "";
+uint8_t at_least_one_idf_connect = 0;
 DynamicJsonBuffer JB_CD;  // CD:ctrl data, i need a better name
 JsonObject& JO_CD = JB_CD.createObject();
 
-
+long last_time;
 ESP8266WebServer server ( 80 );
 char IoTtalkServerIP[100] = "140.113.199.198";
 WiFiClient espClient;
@@ -345,32 +346,38 @@ void CtrlHandle(void){
     JO_CD["odf_topic"] = JO_temp["topic"].as<String>();
     JO_CD["odf_com"]   = JO_temp["command"].as<String>();
 
-    if(JO_CD["odf_com"].as<String>() == "CONNECT"  ){
+    if(     JO_CD["odf_com"].as<String>() == "CONNECT"  ){
       Serial.println(JO_CD["odf_topic"].as<String>().c_str() );
       if(client.subscribe(JO_CD["odf_topic"].as<String>().c_str() )){
         Serial.println("subscribe iottalk output successful");
         String pub_ok = "{\"state\": \"ok\", \"msg_id\": \""+ JO_temp["msg_id"].as<String>() +"\"}";
         client.publish(ctrl_i.c_str(), pub_ok.c_str());
-  
       }
       else
         Serial.println("subscribe iottalk output unsuccessful");
-        
-      
     }
     else if(JO_CD["odf_com"].as<String>() == "DISCONNECT"){
-      
+      if(client.unsubscribe(JO_CD["odf_topic"].as<String>().c_str() ))
+        Serial.println("unsubscribe successful");
+      else
+        Serial.println("unsubscribe successful");
     }
     
   }
   else if( JO_temp.containsKey("idf") ){
-    JO_CD["odf"]       = JO_temp["odf"].as<String>();
+    JO_CD["idf"]       = JO_temp["idf"].as<String>();
     JO_CD["idf_topic"] = JO_temp["topic"].as<String>();
     JO_CD["idf_com"]   = JO_temp["command"].as<String>();
     
+    if(     JO_CD["idf_com"].as<String>() == "CONNECT"  ){
+      at_least_one_idf_connect++;
+      String pub_ok = "{\"state\": \"ok\", \"msg_id\": \""+ JO_temp["msg_id"].as<String>() +"\"}";
+      client.publish(ctrl_i.c_str(), pub_ok.c_str());
+    }
+    else if(JO_CD["idf_com"].as<String>() == "DISCONNECT"  ){
+      at_least_one_idf_connect--;
+    }
   }
-
-  
 }
 
 void setup() {
@@ -382,6 +389,7 @@ void setup() {
 
   EEPROM.begin(512);
   Serial.begin(115200);
+  randomSeed(analogRead(0));
   pinMode(LEDPIN, OUTPUT);  // Initialize the BUILTIN_LED pin as an output
   pinMode(CLEARPIN, INPUT_PULLUP);   // GPIO5 : clear EEPROM
 
@@ -409,12 +417,14 @@ void setup() {
   deviceuuid = ESP8266TrueRandom.uuidToString(mac);
   Serial.println("deviceuuid : " + deviceuuid );
   dev_register();
+  last_time = millis();
 
 }
 void loop() {
+  
+  
   if (digitalRead(CLEARPIN) == LOW){
       clr_eeprom();
-      //LED_flag = 3;
   }
 
   if(!client.loop()) // like mqtt ping ,to make sure the connection between server
@@ -422,6 +432,16 @@ void loop() {
 
   if(new_message){
     CtrlHandle();
+  }
+  
+  if(at_least_one_idf_connect > 0   &&   millis() - last_time >5000 ){
+    last_time = millis();
+    Serial.println("timeup");
+    
+    if( JO_CD["idf_com"].as<String>() == "CONNECT"  &&  JO_CD.containsKey("idf") ){
+      Serial.println("vaild topic");
+      client.publish(JO_CD["idf_topic"].as<String>().c_str(), ("["+(String)random(0,1)+"]" ).c_str() );
+    }
   }
       
 
