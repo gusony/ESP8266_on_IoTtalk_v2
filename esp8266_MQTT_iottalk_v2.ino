@@ -32,19 +32,26 @@ String ctrl_i,ctrl_o,d_name;
 byte uuidBytes16[16]; // UUIDs in binary form are 16 bytes long
 String deviceuuid;
 
+bool new_message = false;
+String mqtt_mes = "";
+DynamicJsonBuffer JB_CD;  // CD:ctrl data, i need a better name
+JsonObject& JO_CD = JB_CD.createObject();
+
 
 ESP8266WebServer server ( 80 );
 char IoTtalkServerIP[100] = "140.113.199.198";
 WiFiClient espClient;
 PubSubClient client(espClient);
+uint8_t wifimode = 1; //1:AP , 0: STA
+
+/*
 //const char* ssid = "Lab117";
 //const char* password = "pcs54784";
-uint8_t wifimode = 1; //1:AP , 0: STA
 //const char* mqtt_server = "140.113.199.198";
 //long lastMsg = 0;
 //char msg[50];
 //int value = 0;
-
+*/
 
 void clr_eeprom(int sw=0){//clear eeprom (and wifi disconnect?)
     if (!sw){
@@ -209,15 +216,17 @@ void saveInfoAndConnectToWiFi(void) {
     }
 }
 
-
-
 void callback(char* topic, byte* payload, unsigned int length) {
+  new_message = true;
   Serial.print("Message arrived [");
   Serial.print(topic);
   Serial.print("] ");
+  mqtt_mes = "";
   for (int i = 0; i < length; i++) {
-    Serial.print((char)payload[i]);
+    mqtt_mes += (char)payload[i];
+    //Serial.print((char)payload[i]);
   }
+  Serial.print(mqtt_mes);
   Serial.println();
 }
 String make_profile(){
@@ -262,7 +271,7 @@ int dev_register(){
 
   for(int i = 0; i<3; i++){
     Str_PUT_resp = http.getString();
-    Serial.println("response : "+Str_PUT_resp);
+    Serial.println("PUT resp : "+Str_PUT_resp);
 
     if(httpCode == 200) {
       Serial.println("HTTP PUT successful\n");
@@ -325,8 +334,43 @@ int dev_register(){
   }
   Serial.println("exit");
 }
-void CtrlHandle(){
+void CtrlHandle(void){
+  new_message = false;
+  
+  DynamicJsonBuffer JB_temp;  // CD:ctrl data, i need a better name
+  JsonObject& JO_temp = JB_temp.parseObject(mqtt_mes);
+  
+  if ( JO_temp.containsKey("odf") ){
+    JO_CD["odf"]       = JO_temp["odf"].as<String>();
+    JO_CD["odf_topic"] = JO_temp["topic"].as<String>();
+    JO_CD["odf_com"]   = JO_temp["command"].as<String>();
 
+    if(JO_CD["odf_com"].as<String>() == "CONNECT"  ){
+      Serial.println(JO_CD["odf_topic"].as<String>().c_str() );
+      if(client.subscribe(JO_CD["odf_topic"].as<String>().c_str() )){
+        Serial.println("subscribe iottalk output successful");
+        String pub_ok = "{\"state\": \"ok\", \"msg_id\": \""+ JO_temp["msg_id"].as<String>() +"\"}";
+        client.publish(ctrl_i.c_str(), pub_ok.c_str());
+  
+      }
+      else
+        Serial.println("subscribe iottalk output unsuccessful");
+        
+      
+    }
+    else if(JO_CD["odf_com"].as<String>() == "DISCONNECT"){
+      
+    }
+    
+  }
+  else if( JO_temp.containsKey("idf") ){
+    JO_CD["odf"]       = JO_temp["odf"].as<String>();
+    JO_CD["idf_topic"] = JO_temp["topic"].as<String>();
+    JO_CD["idf_com"]   = JO_temp["command"].as<String>();
+    
+  }
+
+  
 }
 
 void setup() {
@@ -363,18 +407,23 @@ void setup() {
   //generate device uuid
   WiFi.macAddress(mac);
   deviceuuid = ESP8266TrueRandom.uuidToString(mac);
-  Serial.print("deviceuuid : " + deviceuuid );
+  Serial.println("deviceuuid : " + deviceuuid );
   dev_register();
 
 }
 void loop() {
   if (digitalRead(CLEARPIN) == LOW){
-        clr_eeprom();
-        //LED_flag = 3;
-    }
+      clr_eeprom();
+      //LED_flag = 3;
+  }
 
-    if(!client.loop()) // like mqtt ping ,to make sure the connection between server
-      dev_register();
+  if(!client.loop()) // like mqtt ping ,to make sure the connection between server
+    dev_register();
+
+  if(new_message){
+    CtrlHandle();
+  }
+      
 
 }
 
