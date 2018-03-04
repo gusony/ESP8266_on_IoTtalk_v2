@@ -37,6 +37,8 @@ String mqtt_mes = "";
 uint8_t at_least_one_idf_connect = 0;
 DynamicJsonBuffer JB_CD;  // CD:ctrl data, i need a better name
 JsonObject& JO_CD = JB_CD.createObject();
+JsonArray& JA_CD = JB_CD.createArray();
+
 
 long last_time;
 ESP8266WebServer server ( 80 );
@@ -54,7 +56,7 @@ uint8_t wifimode = 1; //1:AP , 0: STA
 //int value = 0;
 */
 
-void clr_eeprom(int sw=0){//clear eeprom (and wifi disconnect?)
+void clr_eeprom(int sw=0){//clear eeprom (and wifi disconnect?) , need EEPROM.being([bytes])
     if (!sw){
         Serial.println("Count down 3 seconds to clear EEPROM.");
         delay(3000);
@@ -66,7 +68,7 @@ void clr_eeprom(int sw=0){//clear eeprom (and wifi disconnect?)
         digitalWrite(LEDPIN,HIGH);
     }
 }
-void save_WiFi_AP_Info(char *wifiSSID, char *wifiPASS, char *ServerIP){  //stoage format: [SSID,PASS,ServerIP]
+void save_WiFi_AP_Info(char *wifiSSID, char *wifiPASS, char *ServerIP){  //stoage format: [SSID,PASS,ServerIP] , need EEPROM.being([bytes])
 
     char *netInfo[3] = {wifiSSID, wifiPASS, ServerIP};
     int addr=0,i=0,j=0;
@@ -79,7 +81,7 @@ void save_WiFi_AP_Info(char *wifiSSID, char *wifiPASS, char *ServerIP){  //stoag
     EEPROM.write (addr++,']');
     EEPROM.commit();
 }
-int  read_WiFi_AP_Info(char *wifiSSID, char *wifiPASS, char *ServerIP){   // storage format: [SSID,PASS,ServerIP]
+int  read_WiFi_AP_Info(char *wifiSSID, char *wifiPASS, char *ServerIP){   // storage format: [SSID,PASS,ServerIP] , need EEPROM.being([bytes])
     char *netInfo[3] = {wifiSSID, wifiPASS, ServerIP};
     String readdata="";
     int addr=0;
@@ -127,7 +129,7 @@ String scan_network(void){
     return(AP_List);
 }
 void handleRoot(void){
-  Serial.println("handleRoot");
+  //Serial.println("handleRoot");
   String temp = "<html><title>Wi-Fi Setting</title>";
   temp += "<head><meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"/>";
   temp += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"></head>";
@@ -156,21 +158,28 @@ void start_web_server(void){
     server.begin();
 }
 void ap_setting(void){
-    String softapname = "ESP12F";
-    IPAddress ip(192,168,0,1);
-    IPAddress gateway(192,168,0,1);
-    IPAddress subnet(255,255,255,0);
-    WiFi.mode(WIFI_AP_STA);
-    WiFi.disconnect();
-    WiFi.softAPConfig(ip,gateway,subnet);
-    WiFi.softAP(&softapname[0]);
-    //if ( MDNS.begin ( "esp8266" ) ) Serial.println ( "MDNS responder started" ); //enable Multicast DNS to provide Bonjour service.
-
-    start_web_server();
-
-    Serial.println ( "Switch to AP mode and start web server." );
-    while(wifimode) server.handleClient();
-    Serial.println("exit ap_setting");
+  byte mac[6];
+  WiFi.macAddress(mac);
+  
+  String softapname = "ESP12F-";
+  for(i=0; i<6; i++){
+    byte temp = (mac[i]>>4)&0x0F);
+    softapname += (temp  < 0xA ? '0' + temp  : 'A' + temp  - 0xA;
+  }
+  IPAddress ip(192,168,0,1);
+  IPAddress gateway(192,168,0,1);
+  IPAddress subnet(255,255,255,0);
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.disconnect();
+  WiFi.softAPConfig(ip,gateway,subnet);
+  WiFi.softAP(&softapname[0]);
+  //if ( MDNS.begin ( "esp8266" ) ) Serial.println ( "MDNS responder started" ); //enable Multicast DNS to provide Bonjour service.
+  
+  start_web_server();
+  
+  Serial.println ( "Switch to AP mode and start web server." );
+  while(wifimode) server.handleClient();
+  Serial.println("exit ap_setting");
 }
 void connect_to_wifi(char *wifiSSID, char *wifiPASS){
   long connecttimeout = millis();
@@ -223,12 +232,9 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print(topic);
   Serial.print("] ");
   mqtt_mes = "";
-  for (int i = 0; i < length; i++) {
-    mqtt_mes += (char)payload[i];
-    //Serial.print((char)payload[i]);
-  }
-  Serial.print(mqtt_mes);
-  Serial.println();
+  for (int i = 0; i < length; i++)
+    mqtt_mes += (char)payload[i]; 
+  Serial.println(mqtt_mes);
 }
 String make_profile(){
   DynamicJsonBuffer JB_PUT_profile;
@@ -255,7 +261,7 @@ String make_profile(){
   return(result);
 
 }
-int dev_register(){
+int dev_register(void){
   String url = "http://140.113.199.198:9992/";
   String Str_PUT_profile = make_profile();//= "{\"odf_list\": [[\"ESP12F\", [null]]], \"profile\": {\"model\": \"ESP12F\", \"u_name\": null}, \"idf_list\": [[\"ESP12F\", [null]]], \"accept_protos\": [\"mqtt\"]}";
   String Str_PUT_resp;
@@ -328,9 +334,9 @@ int dev_register(){
     else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
-      Serial.println(" try again in 5 seconds");
+      Serial.println(" try again in 1 seconds");
       // Wait 5 seconds before retrying
-      delay(5000);
+      delay(1000);
     }
   }
   Serial.println("exit");
@@ -379,7 +385,12 @@ void CtrlHandle(void){
     }
   }
 }
-
+void store(char *df_name, char *topic, char *command){
+  JsonArray& temp = JA_CD.createNestedArray();
+  temp.add(df_name);
+  temp.add(topic);
+  temp.add(command);
+}
 void setup() {
 
   uint8_t mac[6];
@@ -434,13 +445,13 @@ void loop() {
     CtrlHandle();
   }
   
-  if(at_least_one_idf_connect > 0   &&   millis() - last_time >5000 ){
+  if(at_least_one_idf_connect > 0   &&   millis() - last_time >50 ){
     last_time = millis();
     Serial.println("timeup");
     
     if( JO_CD["idf_com"].as<String>() == "CONNECT"  &&  JO_CD.containsKey("idf") ){
       Serial.println("vaild topic");
-      client.publish(JO_CD["idf_topic"].as<String>().c_str(), ("["+(String)random(0,1)+"]" ).c_str() );
+      client.publish(JO_CD["idf_topic"].as<String>().c_str(), ("["+(String)random(0,1000)+"]" ).c_str() );
     }
   }
       
