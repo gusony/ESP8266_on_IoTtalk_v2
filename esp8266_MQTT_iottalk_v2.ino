@@ -222,9 +222,15 @@ void setup() {
   pinMode(LEDPIN, OUTPUT);  // Initialize the BUILTIN_LED pin as an output
   pinMode(CLEARPIN, INPUT_PULLUP);   // GPIO5 : clear EEPROM
 
+  delay(100);
+  
+  Serial.println(WiFi.status());
   if(WiFi.status() != WL_CONNECTED){
     Serial.println("status != connnected");
     if(read_WiFi_AP_Info(wifiSSID, wifiPASS, &IoTtalkServerIP[0]) == 0) {
+      Serial.println(wifiSSID);
+      Serial.println(wifiPASS);
+      Serial.println((String)IoTtalkServerIP );
       Serial.println("read data from eeprom ,return 0");
       connect_to_wifi(wifiSSID, wifiPASS);
     }
@@ -263,7 +269,7 @@ void loop() {
     CtrlHandle();
   }
   
-  if(at_least_one_idf_connect > 0   &&   millis() - last_time >50 ){
+  if(at_least_one_idf_connect > 0   &&   millis() - last_time >1000 ){
     last_time = millis();
     //Serial.println("timeup");
     

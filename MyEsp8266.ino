@@ -31,9 +31,10 @@ void clr_eeprom(int sw){//clear eeprom (and wifi disconnect?)
     }
 }
 void save_WiFi_AP_Info(char *wifiSSID, char *wifiPASS, char *ServerIP){  //stoage format: [SSID,PASS,ServerIP]
-
+    
     char *netInfo[3] = {wifiSSID, wifiPASS, ServerIP};
     int addr=0,i=0,j=0;
+    
     EEPROM.write (addr++,'[');  // the code is equal to (EEPROM.write (addr,'[');  addr=addr+1;)
     for (j=0;j<3;j++){
         i=0;
