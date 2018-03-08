@@ -24,7 +24,7 @@
 #include <EEPROM.h>
 #include "MyEsp8266.h"
 
-char IoTtalkServerIP[100] = "140.113.199.198";
+extern char IoTtalkServerIP[100];
 extern ESP8266WebServer server ;
 extern WiFiClient espClient;
 extern PubSubClient client;
@@ -45,6 +45,17 @@ JsonArray& JA_CD = JB_CD.createArray();
 long last_time;
 
 
+String state_rev(String state, String rev){
+  String mes;
+  DynamicJsonBuffer JB_temp;
+  JsonObject& JO_temp = JB_temp.createObject();
+  JO_temp["state"] = state;
+  JO_temp["rev"] = rev;
+  JO_temp.printTo(mes);
+  JB_temp.clear();
+  return(mes);
+}
+
 void callback(char* topic, byte* payload, unsigned int length) {
   new_message = true;
   Serial.print("Message arrived [");
@@ -53,7 +64,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
   mqtt_mes = "";
   for (int i = 0; i < length; i++) {
     mqtt_mes += (char)payload[i];
-    //Serial.print((char)payload[i]);
   }
   Serial.print(mqtt_mes);
   Serial.println();
@@ -121,34 +131,18 @@ int dev_register(){
 
 
   while (!client.connected()) {
-    DynamicJsonBuffer JB_wm;
-    JsonObject& JO_wm = JB_wm.createObject(); //json will messenger
-    JO_wm["state"] = "broken";
-    JO_wm["rev"] = rev;
-    String Str_wm;
-    JO_wm.printTo(Str_wm);
-    JB_wm.clear();
-
     Serial.print("Attempting MQTT connection...");
-    if (client.connect(deviceuuid.c_str(), ctrl_i.c_str(), 0, true, Str_wm.c_str() )){// connect to mqtt server
+    if (client.connect(deviceuuid.c_str(), ctrl_i.c_str(), 0, true, state_rev("broken",rev).c_str() )){// connect to mqtt server
       Serial.println("connected state : "+(String)client.state());
 
       if( client.subscribe(ctrl_i.c_str()) )
-        Serial.println("ctrl_i subscribe successful!");
+        Serial.println("ctrl_i subscribe successful!, " + ctrl_i);
 
       if( client.subscribe(ctrl_o.c_str()) )
-        Serial.println("ctil_o subscribe successful!");
+        Serial.println("ctil_o subscribe successful!, " + ctrl_o);
 
       
-      String mes;
-      DynamicJsonBuffer JB_temp;
-      JsonObject& JO_temp = JB_temp.createObject();
-      JO_temp["state"] = "online";
-      JO_temp["rev"] = rev;
-      JO_temp.printTo(mes);
-      Serial.println("mes = "+mes);
-
-      if( client.publish(ctrl_i.c_str(), mes.c_str()) )
+      if( client.publish(ctrl_i.c_str(), state_rev("online",rev).c_str()) )
         Serial.println("publish messenger");
       
       Serial.println("Register finish.");
