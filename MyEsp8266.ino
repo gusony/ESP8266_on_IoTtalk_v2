@@ -10,7 +10,7 @@
 #include "MyEsp8266.h"
 
 
-
+char IoTtalkServerIP[100] = "140.113.199.198";
 ESP8266WebServer server ( 80 );
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -38,8 +38,13 @@ void save_WiFi_AP_Info(char *wifiSSID, char *wifiPASS, char *ServerIP){  //stoag
     EEPROM.write (addr++,'[');  // the code is equal to (EEPROM.write (addr,'[');  addr=addr+1;)
     for (j=0;j<3;j++){
         i=0;
-        while(netInfo[j][i] != '\0') EEPROM.write(addr++,netInfo[j][i++]);
-        if(j<2) EEPROM.write(addr++,',');
+        while(netInfo[j][i] != '\0') {
+          EEPROM.write(addr++,netInfo[j][i++]);
+          delay(4); //a eeprom write command need 3.3ms 
+        }
+        if(j<2){
+          EEPROM.write(addr++,',');
+        }
     }
     EEPROM.write (addr++,']');
     EEPROM.commit();
