@@ -155,72 +155,64 @@ int dev_register(){
     else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
-      Serial.println(" try again in 5 seconds");
+      Serial.println(" try again in 1 seconds");
       // Wait 5 seconds before retrying
-      delay(5000);
+      delay(1000);
     }
   }
   Serial.println("exit");
 }
 void CtrlHandle(void){
   new_message = false;
-  
+  String ok_mes ;
+
   DynamicJsonBuffer JB_temp;  // CD:ctrl data, i need a better name
   JsonObject& JO_temp = JB_temp.parseObject(mqtt_mes);
 
-  if(JO_temp.containsKey("command") && JO_temp["command"].as<String>() == "CONNECT"){
-    if(JO_temp.containsKey("odf")){
-      store(JO_temp["odf"].as<String>(), JO_temp["topic"].as<String>(),JO_temp["command"].as<String>());
-    }
-    else if(JO_temp.containsKey("idf")){
-      store(JO_temp["idf"].as<String>(), JO_temp["topic"].as<String>(),JO_temp["command"].as<String>());
-    }
-  }
-/*
-  if ( JO_temp.containsKey("odf") ){
-    JO_CD["odf"]       = JO_temp["odf"].as<String>();
-    JO_CD["odf_topic"] = JO_temp["topic"].as<String>();
-    JO_CD["odf_com"]   = JO_temp["command"].as<String>();
+  DynamicJsonBuffer JB_ok_mes;  // CD:ctrl data, i need a better name
+  JsonObject& JO_ok_mes = JB_ok_mes.createObject();
 
-    if(     JO_CD["odf_com"].as<String>() == "CONNECT"  ){
-      Serial.println(JO_CD["odf_topic"].as<String>().c_str() );
-      if(client.subscribe(JO_CD["odf_topic"].as<String>().c_str() )){
-        Serial.println("subscribe iottalk output successful");
-        String pub_ok = "{\"state\": \"ok\", \"msg_id\": \""+ JO_temp["msg_id"].as<String>() +"\"}";
-        client.publish(ctrl_i.c_str(), pub_ok.c_str());
+  if(JO_temp.containsKey("command")){
+    if( JO_temp["command"].as<String>() == "CONNECT"){
+      if(JO_temp.containsKey("odf")){
+        Serial.println(JO_temp["odf"].as<String>());
+        Serial.println(JO_temp["topic"].as<String>());
+        Serial.println(JO_temp["command"].as<String>());
+        store(JO_temp["odf"].as<String>(), JO_temp["topic"].as<String>(),JO_temp["command"].as<String>());
       }
-      else
-        Serial.println("subscribe iottalk output unsuccessful");
+      else if(JO_temp.containsKey("idf")){
+        Serial.println(JO_temp["idf"].as<String>());
+        Serial.println(JO_temp["topic"].as<String>());
+        Serial.println(JO_temp["command"].as<String>());
+        store(JO_temp["idf"].as<String>(), JO_temp["topic"].as<String>(),JO_temp["command"].as<String>());
+      }
+      
+      JO_ok_mes["state"] = "ok";
+      JO_ok_mes["msg_id"] = JO_temp["msg_id"].as<String>();
+      JO_ok_mes.printTo(ok_mes) ;
+      Serial.println("ok_mes = "+ ok_mes);
+      client.publish(ctrl_i.c_str(), ok_mes.c_str());
+      JB_ok_mes.clear();
+      
     }
-    else if(JO_CD["odf_com"].as<String>() == "DISCONNECT"){
-      if(client.unsubscribe(JO_CD["odf_topic"].as<String>().c_str() ))
-        Serial.println("unsubscribe successful");
-      else
-        Serial.println("unsubscribe successful");
+    else if(JO_temp["command"].as<String>() == "DISCONNECT"){
+      
+      /* need to unscribe */
+      
+      String remove_df_name = JO_temp["idf"].as<String>().length() > 0 ? JO_temp["idf"].as<String>() : JO_temp["odf"].as<String>();
+      for(int i =0; i<JA_CD.size(); i++)
+        if( remove_df_name == JA_CD[i][0].as<String>())
+          JA_CD.remove(i);
     }
-    
   }
-  else if( JO_temp.containsKey("idf") ){
-    JO_CD["idf"]       = JO_temp["idf"].as<String>();
-    JO_CD["idf_topic"] = JO_temp["topic"].as<String>();
-    JO_CD["idf_com"]   = JO_temp["command"].as<String>();
-    
-    if(     JO_CD["idf_com"].as<String>() == "CONNECT"  ){
-      at_least_one_idf_connect++;
-      String pub_ok = "{\"state\": \"ok\", \"msg_id\": \""+ JO_temp["msg_id"].as<String>() +"\"}";
-      client.publish(ctrl_i.c_str(), pub_ok.c_str());
-    }
-    else if(JO_CD["idf_com"].as<String>() == "DISCONNECT"  ){
-      at_least_one_idf_connect--;
-    }
-  }
-*/
 }
-bool check_idf(String df_name){
-  for(int i =0 ; i<10; i++)
-    if(df_name == idf_list[i])
-      return true;
-  return false;
+int check_idf(String df_name){
+  for(int i =0 ; i<10; i++){
+    if(df_name == idf_list[i]){
+      return i;
+    }
+  }
+  return -1;
 }
 void setup() {
 
@@ -280,11 +272,11 @@ void loop() {
     CtrlHandle();
   }
 
-  for(int i=0; (i<JA_CD.size()) && (millis() - last_time >1000); i++){
-    last_time = millis();
-    
-    if( JA_CD[i][2].as<String>() == "CONNECT"  &&  check_idf(JA_CD[i][0]) ){
-      client.publish(JA_CD[i][0].as<String>().c_str(), ("["+(String)random(0,1000)+"]" ).c_str() );
+  for(int i=0; i < JA_CD.size() ; i++){
+    if( check_idf(JA_CD[i][0].as<String>())>=0 && (millis()-last_time >1000) ){
+      last_time = millis();
+      client.publish(JA_CD[i][1].as<String>().c_str(), ("["+(String)random(0,1000)+"]" ).c_str() );
+      Serial.println("publish, "+JA_CD[i][1].as<String>() );
     }
   }
   
