@@ -164,7 +164,7 @@ int dev_register(){
 }
 void CtrlHandle(void){
   new_message = false;
-  String ok_mes ;
+  String ok_mes = "{\"state\":\"ok\",\"msg_id\":\"";
 
   DynamicJsonBuffer JB_temp;  // CD:ctrl data, i need a better name
   JsonObject& JO_temp = JB_temp.parseObject(mqtt_mes);
@@ -175,29 +175,24 @@ void CtrlHandle(void){
   if(JO_temp.containsKey("command")){
     if( JO_temp["command"].as<String>() == "CONNECT"){
       if(JO_temp.containsKey("odf")){
-        Serial.println(JO_temp["odf"].as<String>());
-        Serial.println(JO_temp["topic"].as<String>());
-        Serial.println(JO_temp["command"].as<String>());
         store(JO_temp["odf"].as<String>(), JO_temp["topic"].as<String>(),JO_temp["command"].as<String>());
+        client.subscribe(JO_temp["topic"].as<String>().c_str());
       }
-      else if(JO_temp.containsKey("idf")){
-        Serial.println(JO_temp["idf"].as<String>());
-        Serial.println(JO_temp["topic"].as<String>());
-        Serial.println(JO_temp["command"].as<String>());
+      else if(JO_temp.containsKey("idf"))
         store(JO_temp["idf"].as<String>(), JO_temp["topic"].as<String>(),JO_temp["command"].as<String>());
-      }
-      
-      JO_ok_mes["state"] = "ok";
-      JO_ok_mes["msg_id"] = JO_temp["msg_id"].as<String>();
-      JO_ok_mes.printTo(ok_mes) ;
-      Serial.println("ok_mes = "+ ok_mes);
+
+      ok_mes += JO_temp["msg_id"].as<String>() + "\"}";   //Serial.println("ok_mes = "+ ok_mes);
       client.publish(ctrl_i.c_str(), ok_mes.c_str());
-      JB_ok_mes.clear();
-      
     }
     else if(JO_temp["command"].as<String>() == "DISCONNECT"){
       
       /* need to unscribe */
+      for(int i=0; i< JA_CD.size(); i++)
+        if(JA_CD[i][0].as<String>() == JO_temp["idf"].as<String>()  || JA_CD[i][0].as<String>() == JO_temp["odf"].as<String>() ){
+          client.unsubscribe(JA_CD[i][1].as<String>().c_str());
+          Serial.println("unsubscribe "+JA_CD[i][0].as<String>()+" "+JA_CD[i][1].as<String>());
+          break;
+        }
       
       String remove_df_name = JO_temp["idf"].as<String>().length() > 0 ? JO_temp["idf"].as<String>() : JO_temp["odf"].as<String>();
       for(int i =0; i<JA_CD.size(); i++)
