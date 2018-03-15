@@ -19,16 +19,15 @@ uint8_t wifimode = 1; //1:AP , 0: STA
 
 
 void clr_eeprom(int sw){//clear eeprom (and wifi disconnect?)
-    if (!sw){
-        //Serial.println("Count down 3 seconds to clear EEPROM.");
-        delay(3000);
-    }
-    if( (digitalRead(CLEARPIN) == LOW) || (sw == 1) ){
-        for(int addr=0; addr<50; addr++) EEPROM.write(addr,0);   // clear eeprom
-        EEPROM.commit();
-        Serial.println("Clear EEPROM.");
-        //digitalWrite(LEDPIN,HIGH);
-    }
+  if (!sw){
+    delay(3000);
+  }
+  if( (digitalRead(CLEARPIN) == LOW) || (sw == 1) ){
+    for(int addr=0; addr<512; addr++) EEPROM.write(addr,0);   // clear eeprom
+    EEPROM.commit();
+    Serial.println("Clear EEPROM.");
+    delay(50);
+  }
 }
 void save_WiFi_AP_Info(char *wifiSSID, char *wifiPASS, char *ServerIP){  //stoage format: [SSID,PASS,ServerIP]
     
@@ -48,6 +47,7 @@ void save_WiFi_AP_Info(char *wifiSSID, char *wifiPASS, char *ServerIP){  //stoag
     }
     EEPROM.write (addr++,']');
     EEPROM.commit();
+    delay(50);
 }
 int  read_WiFi_AP_Info(char *wifiSSID, char *wifiPASS, char *ServerIP){   // storage format: [SSID,PASS,ServerIP]
     char *netInfo[3] = {wifiSSID, wifiPASS, ServerIP};
@@ -181,6 +181,9 @@ void saveInfoAndConnectToWiFi(void) {
     Serial.println("Get network information.");
     char _SSID_[100]="";
     char _PASS_[100]="";
+
+    String temp = "Receive SSID & PASSWORD";
+    server.send ( 200, "text/html", temp );
 
     if (server.arg(0) != ""){//arg[0]-> SSID, arg[1]-> password (both string)
       server.arg(0).toCharArray(_SSID_,sizeof(_SSID_));
