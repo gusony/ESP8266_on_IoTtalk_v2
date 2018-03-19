@@ -39,7 +39,6 @@ bool new_message = false;
 String mqtt_mes = "";
 uint8_t at_least_one_idf_connect = 0;
 DynamicJsonBuffer JB_CD;  // CD:ctrl data, i need a better name
-//JsonObject& JO_CD = JB_CD.createObject();
 JsonArray& JA_CD = JB_CD.createArray();
 
 long last_time;
@@ -231,11 +230,11 @@ void setup() {
       Serial.println(wifiSSID);
       Serial.println(wifiPASS);
       Serial.println((String)IoTtalkServerIP );
-      Serial.println("read data from eeprom ,return 0");
+      Serial.println("read data from eeprom");
       connect_to_wifi(wifiSSID, wifiPASS);
     }
     else {
-      Serial.println("read data from eeprom ,return non 0");
+      Serial.println("read no data from EEPROM");
       ap_setting();
     }
   }
@@ -268,7 +267,7 @@ void loop() {
   }
 
   for(int i=0; i < JA_CD.size() ; i++){
-    if( check_idf(JA_CD[i][0].as<String>())>=0 && (millis()-last_time >1000) ){
+    if( check_idf(JA_CD[i][0].as<String>())>=0  && (millis()-last_time >5000)){
       last_time = millis();
       client.publish(JA_CD[i][1].as<String>().c_str(), ("["+(String)random(0,1000)+"]" ).c_str() );
       Serial.println("publish, "+JA_CD[i][1].as<String>() );
