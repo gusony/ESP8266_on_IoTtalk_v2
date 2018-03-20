@@ -154,9 +154,9 @@ int dev_register(){
     else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
-      Serial.println(" try again in 1 seconds");
+      Serial.println(" try again in 5 seconds");
       // Wait 5 seconds before retrying
-      delay(1000);
+      delay(5000);
     }
   }
   Serial.println("exit");
