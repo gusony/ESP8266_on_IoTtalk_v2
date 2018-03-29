@@ -24,6 +24,8 @@
 #include <EEPROM.h>
 #include "MyEsp8266.h"
 
+#define datasize 1000
+
 extern char IoTtalkServerIP[100];
 extern ESP8266WebServer server ;
 extern WiFiClient espClient;
@@ -42,6 +44,13 @@ DynamicJsonBuffer JB_CD;  // CD:ctrl data, i need a better name
 JsonArray& JA_CD = JB_CD.createArray();
 
 long last_time;
+
+int latency[datasize];
+int packet_count = 0;
+int onetime = 0;
+unsigned long sum =0;
+
+
 
 void store(String df_name, String topic, String command){
   DynamicJsonBuffer JB_temp;
@@ -62,16 +71,25 @@ String state_rev(String state, String rev){
   return(mes);
 }
 void callback(char* topic, byte* payload, unsigned int length) {
+  String number ="";
   new_message = true;
-  Serial.print("Message arrived [");
-  Serial.print(topic);
-  Serial.print("] ");
+  //Serial.print("Message arrived [");
+  //Serial.print(topic);
+  //Serial.print("] ");
   mqtt_mes = "";
   for (int i = 0; i < length; i++) {
+    if(i>=1 && i<length-1)
+      number += (char)payload[i];
     mqtt_mes += (char)payload[i];
   }
-  Serial.print(mqtt_mes);
-  Serial.println();
+  //Serial.println(mqtt_mes);
+  
+  //Serial.println("number"+number);
+  //Serial.println("millis()="+(String)millis());
+  Serial.println((String)(millis() - number.toInt()));
+  if(packet_count <= datasize && number.toInt()>1 && number.toInt()>5000)
+    latency[packet_count++] = millis() - number.toInt();
+  
 }
 String make_profile(){
   DynamicJsonBuffer JB_PUT_profile;
@@ -266,13 +284,25 @@ void loop() {
     CtrlHandle();
   }
 
-  for(int i=0; i < JA_CD.size() ; i++){
-    if( check_idf(JA_CD[i][0].as<String>())>=0  && (millis()-last_time >5000)){
-      last_time = millis();
-      client.publish(JA_CD[i][1].as<String>().c_str(), ("["+(String)random(0,1000)+"]" ).c_str() );
-      Serial.println("publish, "+JA_CD[i][1].as<String>() );
+  
+  if(packet_count>datasize && onetime == 0){
+    onetime = 1;
+    for (int i=0; i<datasize; i++)
+      sum += latency[i];
+    Serial.println("sum = "+(String)sum);
+  }
+  else if(packet_count <= datasize){
+    for(int i=0; i < JA_CD.size() ; i++){
+      if( check_idf(JA_CD[i][0].as<String>())>=0  && (millis()-last_time >500)){
+        last_time = millis();
+        //client.publish(JA_CD[i][1].as<String>().c_str(), ("["+(String)random(0,1000)+"]" ).c_str() );
+        client.publish(JA_CD[i][1].as<String>().c_str(), ("["+(String)millis()+"]" ).c_str() );
+        //Serial.println("publish, "+JA_CD[i][1].as<String>() );
+      }
     }
   }
+  
+  
   
   
       
