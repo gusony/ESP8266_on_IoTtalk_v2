@@ -14,7 +14,8 @@
   * 5. wifi has connected.
   */
 
-#include <PubSubClient.h> // MQTT library
+#ifndef all_header
+#define all_header
 #include "ArduinoJson.h" // json library
 #include "ESP8266TrueRandom.h" // uuid library
 #include <ESP8266WiFi.h>
@@ -22,7 +23,13 @@
 #include <ESP8266WiFiMulti.h>
 #include "ESP8266HTTPClient2.h"
 #include <EEPROM.h>
+#include <PubSubClient.h> // MQTT library
+#include <SPI.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 #include "MyEsp8266.h"
+#endif
 
 #define datasize 1000
 
@@ -34,11 +41,9 @@ extern uint8_t wifimode ; //1:AP , 0: STA
 
 #define put_url "http://140.113.199.198:9992/"
 String idf_list[10] = { "ESP12F_input1" };
-String ctrl_i,ctrl_o,d_name;
+String ctrl_i, ctrl_o, d_name, deviceuuid, mqtt_mes;
 byte uuidBytes16[16]; // UUIDs in binary form are 16 bytes long
-String deviceuuid;
 bool new_message = false;
-String mqtt_mes = "";
 uint8_t at_least_one_idf_connect = 0;
 DynamicJsonBuffer JB_CD;  // CD:ctrl data, i need a better name
 JsonArray& JA_CD = JB_CD.createArray();
@@ -86,9 +91,11 @@ void callback(char* topic, byte* payload, unsigned int length) {
   
   //Serial.println("number"+number);
   //Serial.println("millis()="+(String)millis());
-  Serial.println((String)(millis() - number.toInt()));
-  if(packet_count <= datasize && number.toInt()>1 && number.toInt()>5000)
+  
+  if(packet_count <= datasize && number.toInt()>1 && number.toInt()>5000){
+    Serial.println((String)(millis() - number.toInt()));
     latency[packet_count++] = millis() - number.toInt();
+  }
   
 }
 String make_profile(){
@@ -237,7 +244,7 @@ void setup() {
   Serial.begin(115200);
   randomSeed(analogRead(0));
   pinMode(LEDPIN, OUTPUT);  // Initialize the BUILTIN_LED pin as an output
-  pinMode(CLEARPIN, INPUT_PULLUP);   // GPIO5 : clear EEPROM
+  pinMode(CLEAREEPROM, INPUT_PULLUP);   // GPIO5 : clear EEPROM
 
   delay(100);
   
@@ -273,7 +280,7 @@ void setup() {
 
 }
 void loop() {
-  if (digitalRead(CLEARPIN) == LOW){
+  if (digitalRead(CLEAREEPROM) == LOW){
       clr_eeprom(0);
   }
 

@@ -1,0 +1,27 @@
+esp8266 boot mode.txt
+
+rst cause:
+編號	描述
+0	unknown
+1	normal boot
+2	reset pin
+3	software reset
+4	watchdog reset
+
+boot mode:
+boot mode:(X,y)-> x 表示GPIO 15/2/3 個二進制值 high:1,low:0
+(GPIO<<2) | (GPIO2 << 1) | (GPIO)
+
+由于模块启动的时候会检查0/2/15端口的状态，理解这个数字的意义需要先了解模块的启动模式。
+启动模式	GPIO15 (MTDO)	GPIO0	GPIO2	启动模式
+0		0V				0V		0V		无效
+1		0V				0V		3.3V	Uart bootloader
+2		0V				3.3V	0V		无效
+3		0V				3.3V	3.3V	SPI flash (Boot sketch)
+4		3.3V			0V		0V		SDIO
+5		3.3V			0V		3.3V	SDIO
+6		3.3V			3.3V	0V		SDIO
+7		3.3V			3.3V	3.3V	SDIO
+
+
+
