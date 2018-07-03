@@ -39,8 +39,9 @@ extern WiFiClient espClient;
 extern PubSubClient client;
 extern uint8_t wifimode ; //1:AP , 0: STA
 
-#define put_url "http://140.113.199.198:9992/"
-String idf_list[10] = { "ESP12F_input1" };
+#define put_url "http://140.113.215.7:9992/"
+String idf_list[10] = { "ESP12F_IDF" };
+String odf_list[10] = { "ESP12F_ODF" };
 String ctrl_i, ctrl_o, d_name, deviceuuid, mqtt_mes;
 byte uuidBytes16[16]; // UUIDs in binary form are 16 bytes long
 bool new_message = false;
@@ -54,6 +55,7 @@ int latency[datasize];
 int packet_count = 0;
 int onetime = 0;
 unsigned long sum =0;
+long lastMsg;
 
 
 
@@ -75,22 +77,20 @@ String state_rev(String state, String rev){
   JB_temp.clear();
   return(mes);
 }
+
 void callback(char* topic, byte* payload, unsigned int length) {
   String number ="";
   new_message = true;
-  //Serial.print("Message arrived [");
-  //Serial.print(topic);
-  //Serial.print("] ");
+  Serial.print("[");
+  Serial.print(topic);
+  Serial.print("]->");
   mqtt_mes = "";
   for (int i = 0; i < length; i++) {
     if(i>=1 && i<length-1)
       number += (char)payload[i];
     mqtt_mes += (char)payload[i];
   }
-  //Serial.println(mqtt_mes);
-  
-  //Serial.println("number"+number);
-  //Serial.println("millis()="+(String)millis());
+  Serial.println(mqtt_mes);
   
   if(packet_count <= datasize && number.toInt()>1 && number.toInt()>5000){
     Serial.println((String)(millis() - number.toInt()));
@@ -98,17 +98,61 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
   
 }
+void CtrlHandle(void){
+  new_message = false;
+  String ok_mes = "{\"state\":\"ok\",\"msg_id\":\"";
+
+  DynamicJsonBuffer JB_temp;  // CD:ctrl data, i need a better name
+  JsonObject& JO_temp = JB_temp.parseObject(mqtt_mes);
+
+  DynamicJsonBuffer JB_ok_mes;  // CD:ctrl data, i need a better name
+  JsonObject& JO_ok_mes = JB_ok_mes.createObject();
+
+  if(JO_temp.containsKey("command")){
+    if( JO_temp["command"].as<String>() == "CONNECT"){
+      if(JO_temp.containsKey("odf")){
+        store(JO_temp["odf"].as<String>(), JO_temp["topic"].as<String>(),JO_temp["command"].as<String>());
+        client.subscribe(JO_temp["topic"].as<String>().c_str());
+      }
+      else if(JO_temp.containsKey("idf"))
+        store(JO_temp["idf"].as<String>(), JO_temp["topic"].as<String>(),JO_temp["command"].as<String>());
+
+      ok_mes += JO_temp["msg_id"].as<String>() + "\"}";   //Serial.println("ok_mes = "+ ok_mes);
+      client.publish(ctrl_i.c_str(), ok_mes.c_str());
+    }
+    else if(JO_temp["command"].as<String>() == "DISCONNECT"){
+      
+      /* need to unscribe */
+      for(int i=0; i< JA_CD.size(); i++)
+        if(JA_CD[i][0].as<String>() == JO_temp["idf"].as<String>()  || JA_CD[i][0].as<String>() == JO_temp["odf"].as<String>() ){
+          client.unsubscribe(JA_CD[i][1].as<String>().c_str());
+          Serial.println("unsubscribe "+JA_CD[i][0].as<String>()+" "+JA_CD[i][1].as<String>());
+          break;
+        }
+      
+      String remove_df_name = JO_temp["idf"].as<String>().length() > 0 ? JO_temp["idf"].as<String>() : JO_temp["odf"].as<String>();
+      for(int i =0; i<JA_CD.size(); i++)
+        if( remove_df_name == JA_CD[i][0].as<String>())
+          JA_CD.remove(i);
+    }
+    
+    String result;
+    JA_CD.printTo(result);
+    Serial.println(result);
+  }
+}
+
 String make_profile(){
   DynamicJsonBuffer JB_PUT_profile;
   JsonObject& JO_PUT_profile = JB_PUT_profile.createObject();
 
   JsonArray& odf_list = JO_PUT_profile.createNestedArray("odf_list");
-  odf_list.add("ESP12F");
-  odf_list.createNestedArray().createNestedArray();
+  odf_list.add("ESP12F_ODF");
+  odf_list.createNestedArray();
 
-  JsonArray& idf_list = JO_PUT_profile.createNestedArray("idf_list");
-  idf_list.add("ESP12F");
-  idf_list.createNestedArray().createNestedArray();
+  JsonArray& idf_list = JO_PUT_profile.createNestedArray("idf_list").createNestedArray();
+  idf_list.add("ESP12F_IDF");
+  idf_list.createNestedArray();
 
   JsonObject& profile = JO_PUT_profile.createNestedObject("profile");
   profile["model"] = "ESP12F";
@@ -121,7 +165,6 @@ String make_profile(){
   JO_PUT_profile.printTo(result);
   JB_PUT_profile.clear();
   return(result);
-
 }
 int dev_register(){
   String url = put_url;
@@ -162,16 +205,17 @@ int dev_register(){
   while (!client.connected()) {
     Serial.print("Attempting MQTT connection...");
     if (client.connect(deviceuuid.c_str(), ctrl_i.c_str(), 0, true, state_rev("broken",rev).c_str() )){// connect to mqtt server
+    //if (client.connect("dc4f2210-2fdc-effe-feef-effefeefeffe")){
       Serial.println("connected state : "+(String)client.state());
 
       if( client.subscribe(ctrl_i.c_str()) ) //not necessary
         Serial.println("ctrl_i subscribe successful!, " + ctrl_i);
 
-      if( client.subscribe(ctrl_o.c_str()) )
+      if( client.subscribe(ctrl_o.c_str()))
         Serial.println("ctil_o subscribe successful!, " + ctrl_o);
 
       if( client.publish(ctrl_i.c_str(), state_rev("online",rev).c_str()) )
-        Serial.println("publish messenger[" +ctrl_i+"]:"+state_rev("online",rev));
+        Serial.println("[" +ctrl_i+"]<-"+state_rev("online",rev));
       
       Serial.println("Register finish.");
       break;
@@ -186,45 +230,8 @@ int dev_register(){
   }
   Serial.println("exit");
 }
-void CtrlHandle(void){
-  new_message = false;
-  String ok_mes = "{\"state\":\"ok\",\"msg_id\":\"";
 
-  DynamicJsonBuffer JB_temp;  // CD:ctrl data, i need a better name
-  JsonObject& JO_temp = JB_temp.parseObject(mqtt_mes);
 
-  DynamicJsonBuffer JB_ok_mes;  // CD:ctrl data, i need a better name
-  JsonObject& JO_ok_mes = JB_ok_mes.createObject();
-
-  if(JO_temp.containsKey("command")){
-    if( JO_temp["command"].as<String>() == "CONNECT"){
-      if(JO_temp.containsKey("odf")){
-        store(JO_temp["odf"].as<String>(), JO_temp["topic"].as<String>(),JO_temp["command"].as<String>());
-        client.subscribe(JO_temp["topic"].as<String>().c_str());
-      }
-      else if(JO_temp.containsKey("idf"))
-        store(JO_temp["idf"].as<String>(), JO_temp["topic"].as<String>(),JO_temp["command"].as<String>());
-
-      ok_mes += JO_temp["msg_id"].as<String>() + "\"}";   //Serial.println("ok_mes = "+ ok_mes);
-      client.publish(ctrl_i.c_str(), ok_mes.c_str());
-    }
-    else if(JO_temp["command"].as<String>() == "DISCONNECT"){
-      
-      /* need to unscribe */
-      for(int i=0; i< JA_CD.size(); i++)
-        if(JA_CD[i][0].as<String>() == JO_temp["idf"].as<String>()  || JA_CD[i][0].as<String>() == JO_temp["odf"].as<String>() ){
-          client.unsubscribe(JA_CD[i][1].as<String>().c_str());
-          Serial.println("unsubscribe "+JA_CD[i][0].as<String>()+" "+JA_CD[i][1].as<String>());
-          break;
-        }
-      
-      String remove_df_name = JO_temp["idf"].as<String>().length() > 0 ? JO_temp["idf"].as<String>() : JO_temp["odf"].as<String>();
-      for(int i =0; i<JA_CD.size(); i++)
-        if( remove_df_name == JA_CD[i][0].as<String>())
-          JA_CD.remove(i);
-    }
-  }
-}
 int check_idf(String df_name){
   for(int i =0 ; i<10; i++){
     if(df_name == idf_list[i]){
@@ -247,6 +254,7 @@ void setup() {
   pinMode(CLEAREEPROM, INPUT_PULLUP);   // GPIO5 : clear EEPROM
 
   delay(100);
+
   
   Serial.println(WiFi.status());
   if(WiFi.status() != WL_CONNECTED){
@@ -280,10 +288,13 @@ void setup() {
 
 }
 void loop() {
+  /*
   if (digitalRead(CLEAREEPROM) == LOW){
       clr_eeprom(0);
   }
-
+  */
+  
+  
   if(!client.loop()) // like mqtt ping ,to make sure the connection between server
     dev_register();
 
@@ -291,7 +302,16 @@ void loop() {
     CtrlHandle();
   }
 
+  /*
+  long now = millis();
+  if (now - lastMsg > 2000) {
+    lastMsg = now;
+    
+    client.publish("lastMsg", msg);
+  }
+  */
   
+  /*
   if(packet_count>datasize && onetime == 0){
     onetime = 1;
     for (int i=0; i<datasize; i++)
@@ -308,7 +328,7 @@ void loop() {
       }
     }
   }
-  
+  */
   
   
   

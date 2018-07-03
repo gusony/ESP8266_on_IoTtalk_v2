@@ -21,8 +21,8 @@
 //Adafruit_SSD1306 display(OLED_RESET);
 //#endif
 
-char IoTtalkServerIP[100] = "140.113.199.222"; // v1
-//char IoTtalkServerIP[100] = "140.113.199.198"; // v2
+//char IoTtalkServerIP[100] = "140.113.199.222"; // v1
+char IoTtalkServerIP[100] = "140.113.215.7"; // v2
 ESP8266WebServer server ( 80 );
 WiFiClient espClient;
 PubSubClient client(espClient);
