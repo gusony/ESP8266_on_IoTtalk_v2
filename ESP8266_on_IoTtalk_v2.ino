@@ -46,19 +46,26 @@ String ctrl_i, ctrl_o, d_name, deviceuuid, mqtt_mes;
 byte uuidBytes16[16]; // UUIDs in binary form are 16 bytes long
 bool new_message = false;
 uint8_t at_least_one_idf_connect = 0;
-DynamicJsonBuffer JB_CD;  // CD:ctrl data, i need a better name
-JsonArray& JA_CD = JB_CD.createArray();
+StaticJsonBuffer<512> JB_CD; // Dynamic buffer size is easy to make the esp8266 crash!!!!
+//DynamicJsonBuffer JB_CD;  // CD:ctrl data, i need a better name
+JsonArray& JA_CD = JB_CD.createArray(); // store topic and command of idf/odf, format:[["ESP12F_IDF","topic","command"],["ESP12F_ODF","topic","command"]]
 
 long last_time;
-
 int latency[datasize];
 int packet_count = 0;
 int onetime = 0;
 unsigned long sum =0;
 long lastMsg;
+String IDF_topic;
 
-
-
+int check_idf(String df_name){
+  for(int i =0 ; i<10; i++){
+    if(df_name == idf_list[i]){
+      return i;
+    }
+  }
+  return -1;
+}
 void store(String df_name, String topic, String command){
   DynamicJsonBuffer JB_temp;
   JsonArray& JA_temp = JA_CD.createNestedArray();
@@ -92,11 +99,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
   Serial.println(mqtt_mes);
   
-  if(packet_count <= datasize && number.toInt()>1 && number.toInt()>5000){
-    Serial.println((String)(millis() - number.toInt()));
-    latency[packet_count++] = millis() - number.toInt();
-  }
-  
 }
 void CtrlHandle(void){
   new_message = false;
@@ -119,6 +121,9 @@ void CtrlHandle(void){
 
       ok_mes += JO_temp["msg_id"].as<String>() + "\"}";   //Serial.println("ok_mes = "+ ok_mes);
       client.publish(ctrl_i.c_str(), ok_mes.c_str());
+      
+      if(check_idf("ESP12F_IDF") != -1)
+        IDF_topic = JA_CD[check_idf("ESP12F_IDF")][1].as<String>();
     }
     else if(JO_temp["command"].as<String>() == "DISCONNECT"){
       
@@ -126,7 +131,7 @@ void CtrlHandle(void){
       for(int i=0; i< JA_CD.size(); i++)
         if(JA_CD[i][0].as<String>() == JO_temp["idf"].as<String>()  || JA_CD[i][0].as<String>() == JO_temp["odf"].as<String>() ){
           client.unsubscribe(JA_CD[i][1].as<String>().c_str());
-          Serial.println("unsubscribe "+JA_CD[i][0].as<String>()+" "+JA_CD[i][1].as<String>());
+          Serial.println("[Unsubscribe]"+JA_CD[i][0].as<String>()+", ["+JA_CD[i][1].as<String>())+"]";
           break;
         }
       
@@ -136,34 +141,34 @@ void CtrlHandle(void){
           JA_CD.remove(i);
     }
     
-    String result;
-    JA_CD.printTo(result);
-    Serial.println(result);
+//    String result;
+//    JA_CD.printTo(result);
+//    Serial.println(result);
   }
 }
 
 String make_profile(){
-  DynamicJsonBuffer JB_PUT_profile;
-  JsonObject& JO_PUT_profile = JB_PUT_profile.createObject();
-
-  JsonArray& odf_list = JO_PUT_profile.createNestedArray("odf_list");
-  odf_list.add("ESP12F_ODF");
-  odf_list.createNestedArray();
-
-  JsonArray& idf_list = JO_PUT_profile.createNestedArray("idf_list").createNestedArray();
-  idf_list.add("ESP12F_IDF");
-  idf_list.createNestedArray();
-
-  JsonObject& profile = JO_PUT_profile.createNestedObject("profile");
-  profile["model"] = "ESP12F";
-  profile["u_name"] = "null";
-
-  JsonArray& accept_protos = JO_PUT_profile.createNestedArray("accept_protos");
-  accept_protos.add("mqtt");
-
-  String result;
-  JO_PUT_profile.printTo(result);
-  JB_PUT_profile.clear();
+//  DynamicJsonBuffer JB_PUT_profile;
+//  JsonObject& JO_PUT_profile = JB_PUT_profile.createObject();
+//
+//  JsonArray& odf_list = JO_PUT_profile.createNestedArray("odf_list");
+//  odf_list.add("ESP12F_ODF");
+//  odf_list.createNestedArray();
+//
+//  JsonArray& idf_list = JO_PUT_profile.createNestedArray("idf_list").createNestedArray();
+//  idf_list.add("ESP12F_IDF");
+//  idf_list.createNestedArray();
+//
+//  JsonObject& profile = JO_PUT_profile.createNestedObject("profile");
+//  profile["model"] = "ESP12F";
+//  profile["u_name"] = "null";
+//
+//  JsonArray& accept_protos = JO_PUT_profile.createNestedArray("accept_protos");
+//  accept_protos.add("mqtt");
+//
+  String result = "{\"odf_list\":[[\"ESP12F_ODF\",[]]],  \"idf_list\":[\"ESP12F_IDF\",[[]]],  \"profile\":{\"model\":\"ESP12F\",\"u_name\":\"null\"},  \"accept_protos\":[\"mqtt\"]}";
+//  JO_PUT_profile.printTo(result);
+//  JB_PUT_profile.clear();
   return(result);
 }
 int dev_register(){
@@ -232,14 +237,7 @@ int dev_register(){
 }
 
 
-int check_idf(String df_name){
-  for(int i =0 ; i<10; i++){
-    if(df_name == idf_list[i]){
-      return i;
-    }
-  }
-  return -1;
-}
+
 void setup() {
 
   uint8_t mac[6];
@@ -302,14 +300,13 @@ void loop() {
     CtrlHandle();
   }
 
-  /*
+  
   long now = millis();
-  if (now - lastMsg > 2000) {
+  if (now - lastMsg > 2000 && IDF_topic != "" ) {
     lastMsg = now;
-    
-    client.publish("lastMsg", msg);
+    client.publish(IDF_topic.c_str(), ("["+(String)lastMsg+"]").c_str());
   }
-  */
+  
   
   /*
   if(packet_count>datasize && onetime == 0){
