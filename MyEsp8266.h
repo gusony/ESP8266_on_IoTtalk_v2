@@ -15,7 +15,7 @@
 #include <SoftwareSerial.h>
 #include "ArduinoJson.h" // json library
 #include "ESP8266TrueRandom.h" // uuid library
-#include "ESP8266HTTPClient2.h"
+#include "ESP8266HTTPClient.h"
 #include "MyEsp8266.h"
 #endif
 

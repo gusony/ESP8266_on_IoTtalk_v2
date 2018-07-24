@@ -14,22 +14,8 @@
   * 5. wifi has connected.
   */
 
-#ifndef all_header
-#define all_header
-#include "ArduinoJson.h" // json library
-#include "ESP8266TrueRandom.h" // uuid library
-#include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h>
-#include <ESP8266WiFiMulti.h>
-#include "ESP8266HTTPClient2.h"
-#include <EEPROM.h>
-#include <PubSubClient.h> // MQTT library
-#include <SPI.h>
-#include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
+
 #include "MyEsp8266.h"
-#endif
 
 #define datasize 1000
 
@@ -85,7 +71,7 @@ String state_rev(String state, String rev){
   return(mes);
 }
 
-void callback(char* topic, byte* payload, unsigned int length) {
+void callback(char* topic, byte* payload, int length) {
   String number ="";
   new_message = true;
   Serial.print("[");
@@ -148,33 +134,35 @@ void CtrlHandle(void){
 }
 
 String make_profile(){
-//  DynamicJsonBuffer JB_PUT_profile;
-//  JsonObject& JO_PUT_profile = JB_PUT_profile.createObject();
-//
-//  JsonArray& odf_list = JO_PUT_profile.createNestedArray("odf_list");
-//  odf_list.add("ESP12F_ODF");
-//  odf_list.createNestedArray();
-//
-//  JsonArray& idf_list = JO_PUT_profile.createNestedArray("idf_list").createNestedArray();
-//  idf_list.add("ESP12F_IDF");
-//  idf_list.createNestedArray();
-//
-//  JsonObject& profile = JO_PUT_profile.createNestedObject("profile");
-//  profile["model"] = "ESP12F";
-//  profile["u_name"] = "null";
-//
-//  JsonArray& accept_protos = JO_PUT_profile.createNestedArray("accept_protos");
-//  accept_protos.add("mqtt");
-//
-  String result = "{\"odf_list\":[[\"ESP12F_ODF\",[]]],  \"idf_list\":[\"ESP12F_IDF\",[[]]],  \"profile\":{\"model\":\"ESP12F\",\"u_name\":\"null\"},  \"accept_protos\":[\"mqtt\"]}";
-//  JO_PUT_profile.printTo(result);
-//  JB_PUT_profile.clear();
+  
+  StaticJsonBuffer<512> JB_PUT_profile;
+  JsonObject& JO_PUT_profile = JB_PUT_profile.createObject();
+
+  JsonArray& odf_list = JO_PUT_profile.createNestedArray("odf_list").createNestedArray();
+  odf_list.add("ESP12F_ODF");
+  odf_list.createNestedArray();
+
+  JsonArray& idf_list = JO_PUT_profile.createNestedArray("idf_list").createNestedArray();
+  idf_list.add("ESP12F_IDF");
+  idf_list.createNestedArray();
+
+  JsonObject& profile = JO_PUT_profile.createNestedObject("profile");
+  profile["model"] = "ESP12F";
+  profile["u_name"] = "null";
+
+  JsonArray& accept_protos = JO_PUT_profile.createNestedArray("accept_protos");
+  accept_protos.add("mqtt");
+
+  String result ;//= "{\"odf_list\":[[\"ESP12F_ODF\",[]]],  \"idf_list\":[\"ESP12F_IDF\",[[]]],  \"profile\":{\"model\":\"ESP12F\",\"u_name\":\"null\"},  \"accept_protos\":[\"mqtt\"]}";
+  JO_PUT_profile.printTo(result);
+  JB_PUT_profile.clear();
   return(result);
 }
 int dev_register(){
   String url = put_url;
   String Str_PUT_resp;
   String rev;
+  
 
   //http PUT
   int httpCode;
@@ -204,6 +192,7 @@ int dev_register(){
       delay(100);
       httpCode = http.PUT(make_profile());
     }
+    delay(500);
   }
 
 
@@ -250,7 +239,7 @@ void setup() {
   randomSeed(analogRead(0));
   pinMode(LEDPIN, OUTPUT);  // Initialize the BUILTIN_LED pin as an output
   pinMode(CLEAREEPROM, INPUT_PULLUP);   // GPIO5 : clear EEPROM
-
+  
   delay(100);
 
   
@@ -286,11 +275,11 @@ void setup() {
 
 }
 void loop() {
-  /*
+  
   if (digitalRead(CLEAREEPROM) == LOW){
       clr_eeprom(0);
   }
-  */
+  
   
   
   if(!client.loop()) // like mqtt ping ,to make sure the connection between server

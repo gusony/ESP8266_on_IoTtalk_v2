@@ -12,7 +12,7 @@
 #include <SoftwareSerial.h>
 #include "ArduinoJson.h" // json library
 #include "ESP8266TrueRandom.h" // uuid library
-#include "ESP8266HTTPClient2.h"
+#include "ESP8266HTTPClient.h"
 #include "MyEsp8266.h"
 #endif
 
@@ -22,6 +22,7 @@
 //#endif
 
 //char IoTtalkServerIP[100] = "140.113.199.222"; // v1
+//char IoTtalkServerIP[100] = "140.113.199.198"; // v2
 char IoTtalkServerIP[100] = "140.113.215.7"; // v2
 ESP8266WebServer server ( 80 );
 WiFiClient espClient;
