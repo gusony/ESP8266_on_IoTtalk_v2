@@ -152,7 +152,7 @@ String make_profile(){
   JsonArray& accept_protos = JO_PUT_profile.createNestedArray("accept_protos");
   accept_protos.add("mqtt");
 
-  String result ;//= "{\"odf_list\":[[\"ESP12F_ODF\",[]]],  \"idf_list\":[\"ESP12F_IDF\",[[]]],  \"profile\":{\"model\":\"ESP12F\",\"u_name\":\"null\"},  \"accept_protos\":[\"mqtt\"]}";
+  String result ;
   JO_PUT_profile.printTo(result);
   JB_PUT_profile.clear();
   return(result);
@@ -161,23 +161,23 @@ int dev_register(){
   String url = put_url;
   String Str_PUT_resp;
   String rev;
-  
-
-  //http PUT
+  String S_profile = make_profile();
   int httpCode;
+
+  Serial.println("profile:\n\t"+S_profile);
+  Serial.println("PUT URL:\n\t"+url+deviceuuid);
+  
+  //http PUT
   HTTPClient http;
   http.begin(url+deviceuuid);
   http.addHeader("Content-Type","application/json");
-  httpCode = http.PUT(make_profile());
-
-  Serial.println("url="+url+deviceuuid);
+  httpCode = http.PUT(S_profile);
 
   for(int i = 0; i<3; i++){
-    Str_PUT_resp = http.getString();
-    Serial.println("PUT resp : "+Str_PUT_resp);
-
     if(httpCode == 200) {
-      Serial.println("HTTP PUT successful\n");
+      Str_PUT_resp = http.getString();
+      Serial.println("PUT resp : "+Str_PUT_resp);
+      
       DynamicJsonBuffer JB_PUT_resp;
       JsonObject& JO_PUT_resp = JB_PUT_resp.parseObject(Str_PUT_resp);
       ctrl_i = JO_PUT_resp["ctrl_chans"][0].as<String>(); Serial.println("ctrl_i:"+ctrl_i);
@@ -188,17 +188,18 @@ int dev_register(){
       break;
     }
     else if(httpCode !=200){
+      Serial.println("httpCode="+(String)httpCode);
       delay(100);
       httpCode = http.PUT(make_profile());
     }
     delay(500);
   }
+  http.end();
 
 
   while (!client.connected()) {
     Serial.print("Attempting MQTT connection...");
     if (client.connect(deviceuuid.c_str(), ctrl_i.c_str(), 0, true, state_rev("broken",rev).c_str() )){// connect to mqtt server
-    //if (client.connect("dc4f2210-2fdc-effe-feef-effefeefeffe")){
       Serial.println("connected state : "+(String)client.state());
 
       if( client.subscribe(ctrl_i.c_str()) ) //not necessary
@@ -217,7 +218,7 @@ int dev_register(){
       Serial.print("failed, rc=");
       Serial.print(client.state());
       Serial.println(" try again in 5 seconds");
-      // Wait 5 seconds before retrying
+      
       delay(5000);
     }
   }
