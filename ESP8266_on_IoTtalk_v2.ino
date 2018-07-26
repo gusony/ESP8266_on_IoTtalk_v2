@@ -18,14 +18,14 @@
 #include "MyEsp8266.h"
 
 #define datasize 1000
-
+#define put_url "http://140.113.199.198:9992/"
 extern char IoTtalkServerIP[100];
 extern ESP8266WebServer server ;
 extern WiFiClient espClient;
-extern PubSubClient client;
+extern PubSubClient client; //mqtt
 extern uint8_t wifimode ; //1:AP , 0: STA
 
-#define put_url "http://140.113.215.7:9992/"
+
 String idf_list[10] = { "ESP12F_IDF" };
 String odf_list[10] = { "ESP12F_ODF" };
 String ctrl_i, ctrl_o, d_name, deviceuuid, mqtt_mes;
@@ -45,11 +45,10 @@ long lastMsg;
 String IDF_topic;
 
 int check_idf(String df_name){
-  for(int i =0 ; i<10; i++){
-    if(df_name == idf_list[i]){
+  for(int i =0 ; i<10; i++)
+    if(df_name == idf_list[i])
       return i;
-    }
-  }
+
   return -1;
 }
 void store(String df_name, String topic, String command){
@@ -242,7 +241,7 @@ void setup() {
   
   delay(100);
 
-  
+  //get wifi status
   Serial.println(WiFi.status());
   if(WiFi.status() != WL_CONNECTED){
     Serial.println("status != connnected");
