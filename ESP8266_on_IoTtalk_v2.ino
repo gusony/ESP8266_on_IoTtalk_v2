@@ -3,16 +3,14 @@
  * 1. store wifi info by json format
  * 2. show html
  * 3. send HTTP post to server
+ *
+ * when device set up, it need to check wifi first
+ * 1. check wifi status(has connecte to wifi or not), WL_CONNECTED->5. ,other->2.
+ * 2. check EEPROM (if there are data in EEPROM), return(0)->5. , false->3.
+ * 3. start the web server(let user choose ssid and password ), go to 4.
+ * 4. connect to wifi ap and store data to EEPROM, go to 5.
+ * 5. wifi has connected.
  */
-
- /*
-  * when device set up, it need to check wifi first
-  * 1. check wifi status(has connecte to wifi or not), WL_CONNECTED->5. ,other->2.
-  * 2. check EEPROM (if there are data in EEPROM), return(0)->5. , false->3.
-  * 3. start the web server(let user choose ssid and password ), go to 4.
-  * 4. connect to wifi ap and store data to EEPROM, go to 5.
-  * 5. wifi has connected.
-  */
 
 
 #include "MyEsp8266.h"
@@ -72,18 +70,18 @@ String state_rev(String state, String rev){
 
 void callback(char* topic, byte* payload, int length) {
   String number ="";
+  mqtt_mes = "";
   new_message = true;
   Serial.print("[");
   Serial.print(topic);
   Serial.print("]->");
-  mqtt_mes = "";
+  
   for (int i = 0; i < length; i++) {
     if(i>=1 && i<length-1)
       number += (char)payload[i];
     mqtt_mes += (char)payload[i];
   }
   Serial.println(mqtt_mes);
-  
 }
 void CtrlHandle(void){
   new_message = false;
@@ -291,7 +289,7 @@ void loop() {
 
   
   long now = millis();
-  if (now - lastMsg > 2000 && IDF_topic != "" ) {
+  if (now - lastMsg > 100 && IDF_topic != "" ) {
     lastMsg = now;
     client.publish(IDF_topic.c_str(), ("["+(String)lastMsg+"]").c_str());
   }
